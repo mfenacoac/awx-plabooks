@@ -1,0 +1,9 @@
+---
+- name: Iniciar JBoss en servidor Windows
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Iniciar JBoss con standalone.bat
+      win_command: 'C:\jboss-eap-7.4.0\jboss-eap-7.4\bin\standalone.bat'
+      args:
+        chdir: 'C:\jboss-eap-7.4.0\jboss-eap-7.4\bin'

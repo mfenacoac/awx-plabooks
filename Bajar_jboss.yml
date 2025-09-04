@@ -1,0 +1,24 @@
+---
+- name: Detener JBoss y limpiar logs
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Detener JBoss usando jboss-cli
+      win_shell: >
+        C:\jboss-eap-7.4.0\jboss-eap-7.4\bin\jboss-cli.bat --connect command=:shutdown
+      register: shutdown_result
+
+    - name: Esperar 10 segundos para asegurar que JBoss se detuvo
+      pause:
+        seconds: 10
+
+    - name: Borrar archivos de log de JBoss
+      win_file:
+        path: C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\tmp
+        path: C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\data
+        state: absent
+
+    - name: Volver a crear carpeta de logs
+      win_file:
+        path: C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\log
+        state: directory
