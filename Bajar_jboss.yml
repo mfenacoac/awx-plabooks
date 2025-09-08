@@ -12,11 +12,13 @@
       pause:
         seconds: 10
 
-    - name: Borrar archivos de log de JBoss
+    - name: Borrar carpetas tmp y data de JBoss
       win_file:
-        path: C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\tmp
-        path: C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\data
+        path: "{{ item }}"
         state: absent
+      loop:
+        - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\tmp
+        - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\data
 
     - name: Volver a crear carpeta de logs
       win_file:
