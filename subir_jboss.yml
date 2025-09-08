@@ -1,10 +1,3 @@
----
-- name: Iniciar JBoss en servidor Windows
-  hosts: all
-  gather_facts: no
-  tasks:
-    - name: Iniciar JBoss en segundo plano
-      win_shell: >
-        start "" "C:\jboss-eap-7.4.0\jboss-eap-7.4\bin\standalone.bat"
-      args:
-        chdir: 'C:\jboss-eap-7.4.0\jboss-eap-7.4\bin'
+- name: Iniciar JBoss en segundo plano con PowerShell
+  win_shell: >
+    Start-Process -FilePath "C:\jboss-eap-7.4.0\jboss-eap-7.4\bin\standalone.bat" -WorkingDirectory "C:\jboss-eap-7.4.0\jboss-eap-7.4\bin"
