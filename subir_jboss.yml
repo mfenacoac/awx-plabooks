@@ -3,7 +3,9 @@
   hosts: all
   gather_facts: no
   tasks:
-    - name: Iniciar JBoss en segundo plano con CMD
+    - name: Iniciar JBoss en segundo plano con async
       win_command: cmd /c start "" "C:\jboss-eap-7.4.0\jboss-eap-7.4\bin\standalone.bat"
       args:
         chdir: C:\jboss-eap-7.4.0\jboss-eap-7.4\bin
+      async: 10
+      poll: 0
