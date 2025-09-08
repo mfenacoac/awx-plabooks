@@ -1,6 +1,6 @@
 ---
 - name: Instalar Firefox desde Nginx/HTTP en Windows
-  hosts: windows_servers
+  hosts: all
   gather_facts: no
   vars:
     win_temp: "C:\\temp"
