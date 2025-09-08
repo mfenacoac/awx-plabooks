@@ -1,4 +1,3 @@
----
 - name: Instalar Firefox desde Nginx/HTTP en Windows
   hosts: all
   gather_facts: no
@@ -6,7 +5,7 @@
     win_temp: "C:\\temp"
     win_dest: "C:\\Program Files\\Mozilla Firefox"
     firefox_file: "firefox_installer.exe"
-    firefox_url: "http://10.62.64.22:30080/files/{{ firefox_file }}"  # reemplaza con tu nodo y puerto
+    firefox_url: "http://10.62.64.22:30080/files/{{ firefox_file }}"
 
   tasks:
     - name: Crear carpeta temporal en Windows
@@ -31,7 +30,7 @@
         remote_src: yes
 
     - name: Ejecutar instalador de Firefox en modo silencioso
-      win_command: "{{ win_dest }}\\{{ firefox_file }} /S"
+      win_command: '"{{ win_dest }}\\{{ firefox_file }}" /S'
       args:
         chdir: "{{ win_dest }}"
       register: install_result
