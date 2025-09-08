@@ -21,7 +21,7 @@
         - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\data
         - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\log
 
-    - name: Volver a crear carpeta de logs
-      win_file:
-        path: C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\log
-        state: directory
+    #- name: Volver a crear carpeta de logs
+      #win_file:
+        #path: C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\log
+        #state: directory
