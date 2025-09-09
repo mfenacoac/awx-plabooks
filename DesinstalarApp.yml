@@ -1,11 +1,21 @@
 ---
-- name: Eliminar Firefox de Windows
+- name: Desinstalar Firefox en Windows
   hosts: all
   gather_facts: no
+  vars:
+    firefox_name: "Mozilla Firefox"
 
   tasks:
+    - name: Verificar si Firefox está instalado
+      win_shell: |
+        $app = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq "{{ firefox_name }}" }
+        if ($app) { Write-Output "Installed" } else { Write-Output "NotInstalled" }
+      register: firefox_check
 
-    - name: Desinstalar Firefox vía helper.exe
-      win_command: helper.exe /S
-      args:
-        chdir: 'C:\Program Files\Mozilla Firefox\uninstall'
+    - debug:
+        var: firefox_check.stdout
+
+    - name: Desinstalar Firefox si está instalado
+      win_shell: |
+        Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq "{{ firefox_name }}" } | ForEach-Object { $_.Uninstall() }
+      when: firefox_check.stdout == "Installed"
