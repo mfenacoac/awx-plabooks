@@ -1,17 +1,16 @@
 ---
-- name: Detectar y desinstalar Firefox en Windows
+- name: Desinstalar Firefox en Windows usando UninstallString
   hosts: all
   gather_facts: no
 
   tasks:
-    - name: Obtener ProductId de Firefox
+    - name: Obtener UninstallString de Firefox
       ansible.windows.win_shell: |
-        (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" |
-        Where-Object { $_.DisplayName -like "Mozilla Firefox*" }).PSChildName
-      register: firefox_id
+        (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*", 
+                          "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" |
+        Where-Object { $_.DisplayName -like "Mozilla Firefox*" }).UninstallString
+      register: firefox_uninstall
 
-    - name: Desinstalar Firefox usando ProductId detectado
-      ansible.windows.win_package:
-        product_id: "{{ firefox_id.stdout | trim }}"
-        state: absent
-      when: firefox_id.stdout != ""
+    - name: Ejecutar desinstalador de Firefox
+      ansible.windows.win_command: "{{ firefox_uninstall.stdout }} /S"
+      when: firefox_uninstall.stdout != ""
