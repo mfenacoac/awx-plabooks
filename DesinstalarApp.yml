@@ -1,0 +1,21 @@
+---
+- name: Desinstalar Firefox en Windows
+  hosts: all
+  gather_facts: no
+  vars:
+    app: "Mozilla Firefox"
+
+  tasks:
+    - name: Verificar si la app esta instalada
+      win_shell: |
+        $app = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq "{{ app }}" }
+        if ($app) { Write-Output "Installed" } else { Write-Output "NotInstalled" }
+      register: firefox_check
+
+    - debug:
+        var: appdebug.stdout
+
+    - name: Desinstalar Firefox si está instalado
+      win_shell: |
+        Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq "{{ app }}" } | ForEach-Object { $_.Uninstall() }
+      when: appdebug.stdout == "Installed"
