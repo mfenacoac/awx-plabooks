@@ -4,8 +4,26 @@
   gather_facts: no
 
   tasks:
-    - name: Desinstalar Firefox con el desinstalador
+    - name: Revisar si Firefox 64-bit está instalado
+      ansible.windows.win_stat:
+        path: 'C:\Program Files\Mozilla Firefox\uninstall\helper.exe'
+      register: firefox64
+
+    - name: Revisar si Firefox 32-bit está instalado
+      ansible.windows.win_stat:
+        path: 'C:\Program Files (x86)\Mozilla Firefox\uninstall\helper.exe'
+      register: firefox32
+
+    - name: Desinstalar Firefox 64-bit
       ansible.windows.win_package:
         path: 'C:\Program Files\Mozilla Firefox\uninstall\helper.exe'
         arguments: '/S'
         state: absent
+      when: firefox64.stat.exists
+
+    - name: Desinstalar Firefox 32-bit
+      ansible.windows.win_package:
+        path: 'C:\Program Files (x86)\Mozilla Firefox\uninstall\helper.exe'
+        arguments: '/S'
+        state: absent
+      when: firefox32.stat.exists
