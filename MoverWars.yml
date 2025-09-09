@@ -1,0 +1,39 @@
+- name: Mover wars hacia carpeta de deployment
+  hosts: all
+  gather_facts: no
+  vars:
+    win_temp: "C:\\temp"
+    win_dest: "C:\\jboss-eap-7.4.0\\jboss-eap-7.4\\standalone\\deployments"
+    firefox_file: "hello-world-test.war"
+    firefox_url: "http://10.62.64.22:30080/files/{{ firefox_file }}"
+
+  tasks:
+    - name: Crear carpeta temporal en Windows
+      win_file:
+        path: "{{ win_temp }}"
+        state: directory
+
+    - name: Descargar Firefox desde Nginx
+      win_get_url:
+        url: "{{ firefox_url }}"
+        dest: "{{ win_temp }}\\{{ firefox_file }}"
+
+    - name: Crear carpeta de destino
+      win_file:
+        path: "{{ win_dest }}"
+        state: directory
+
+    - name: Mover instalador a carpeta de destino
+      win_copy:
+        src: "{{ win_temp }}\\{{ firefox_file }}"
+        dest: "{{ win_dest }}\\{{ firefox_file }}"
+        remote_src: yes
+
+    - name: Ejecutar instalador de Firefox en modo silencioso
+      win_command: '"{{ win_dest }}\\{{ firefox_file }}" /S'
+      args:
+        chdir: "{{ win_dest }}"
+      register: install_result
+
+    - debug:
+        var: install_result.stdout
