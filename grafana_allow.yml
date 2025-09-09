@@ -1,7 +1,0 @@
----
-- name: Ejecutar comando para detener JBoss
-  hosts: all
-  gather_facts: no
-  tasks:
-    - name: Detener JBoss usando jboss-cli
-      win_shell: C:\jboss-eap-7.4.0\jboss-eap-7.4\bin\jboss-cli.bat --connect command=:shutdown
