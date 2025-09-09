@@ -1,6 +1,6 @@
 ---
 - name: Desinstalar Firefox en Windows
-  hosts: windows_servers
+  hosts: all
   gather_facts: yes
   
   vars:
