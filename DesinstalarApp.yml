@@ -11,6 +11,10 @@
         Where-Object { $_.DisplayName -like "Mozilla Firefox*" }).UninstallString
       register: firefox_uninstall
 
+    - name: Limpiar UninstallString (quitar retornos de carro y saltos de línea)
+      set_fact:
+        firefox_uninstall_clean: "{{ firefox_uninstall.stdout | replace('\r','') | replace('\n','') }}"
+
     - name: Ejecutar desinstalador de Firefox
-      ansible.windows.win_command: "{{ firefox_uninstall.stdout }} /S"
-      when: firefox_uninstall.stdout != ""
+      ansible.windows.win_command: '"{{ firefox_uninstall_clean }}" /S'
+      when: firefox_uninstall_clean != ""
