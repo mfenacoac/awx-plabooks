@@ -4,9 +4,8 @@
   gather_facts: no
 
   tasks:
-    - name: Uninstall 7zip from the exe
-    ansible.windows.win_package:
-    path: C:\Program Files\Mozilla Firefox\uninstall\helper.exe
-    product_id: Mozilla Firefox (x64 es-MX)
-    arguments: /S
-    state: absent
+    - name: Desinstalar Firefox con el desinstalador
+      ansible.windows.win_package:
+        path: 'C:\Program Files\Mozilla Firefox\uninstall\helper.exe'
+        arguments: '/S'
+        state: absent
