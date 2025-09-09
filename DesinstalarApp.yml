@@ -3,19 +3,19 @@
   hosts: all
   gather_facts: no
   vars:
-    app: "Mozilla Firefox"
+    firefox_name: "Mozilla Firefox"
 
   tasks:
-    - name: Verificar si la app esta instalada
+    - name: Verificar si Firefox está instalado
       win_shell: |
-        $app = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq "{{ app }}" }
+        $app = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq "{{ firefox_name }}" }
         if ($app) { Write-Output "Installed" } else { Write-Output "NotInstalled" }
       register: firefox_check
 
     - debug:
-        var: appdebug.stdout
+        var: firefox_check.stdout
 
     - name: Desinstalar Firefox si está instalado
       win_shell: |
-        Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq "{{ app }}" } | ForEach-Object { $_.Uninstall() }
-      when: appdebug.stdout == "Installed"
+        Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq "{{ firefox_name }}" } | ForEach-Object { $_.Uninstall() }
+      when: firefox_check.stdout == "Installed"
