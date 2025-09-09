@@ -1,19 +1,113 @@
 ---
-- name: Desinstalar Firefox en Windows usando UninstallString
-  hosts: all
-  gather_facts: no
-
+- name: Desinstalar Firefox en Windows
+  hosts: windows_servers
+  gather_facts: yes
+  
+  vars:
+    # Configuración para Firefox
+    app_name: "Mozilla Firefox"
+    firefox_uninstaller: "C:\\Program Files\\Mozilla Firefox\\uninstall\\helper.exe"
+    
   tasks:
-    - name: Obtener UninstallString de Firefox
-      ansible.windows.win_shell: |
-        (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*", 
-                          "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" |
-        Where-Object { $_.DisplayName -like "Mozilla Firefox*" }).UninstallString
-      register: firefox_uninstall
-
-    - name: Ejecutar desinstalador de Firefox silenciosamente
-      ansible.windows.win_shell: |
-        if ("{{ firefox_uninstall.stdout | trim }}" -ne "") {
-          & ( "{{ firefox_uninstall.stdout | trim }}" -replace '\r','' -replace '\n','' ) /S
+    - name: Verificar si Firefox está instalado
+      win_reg_stat:
+        path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall
+        name: "{{ app_name }}"
+      register: firefox_installed
+      
+    - name: Obtener información de programas instalados
+      win_shell: |
+        Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*Firefox*"} | Select-Object Name, Version, IdentifyingNumber
+      register: firefox_info
+      when: firefox_installed.exists
+      
+    - name: Mostrar información de Firefox si está instalado
+      debug:
+        msg: "Firefox encontrado: {{ firefox_info.stdout }}"
+      when: firefox_installed.exists and firefox_info.stdout != ""
+      
+    # Método 1: Usar el desinstalador nativo de Firefox
+    - name: Desinstalar Firefox usando desinstalador nativo
+      win_command: '"{{ firefox_uninstaller }}" /S'
+      register: uninstall_result
+      failed_when: false
+      when: firefox_installed.exists
+      
+    # Método 2: Usar PowerShell con Get-WmiObject (alternativo)
+    - name: Desinstalar Firefox usando WMI (método alternativo)
+      win_shell: |
+        $app = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*Firefox*"}
+        if ($app) {
+            $app.Uninstall()
+            Write-Output "Firefox desinstalado exitosamente"
+        } else {
+            Write-Output "Firefox no encontrado"
         }
-      when: firefox_uninstall.stdout != ""
+      register: wmi_uninstall
+      when: firefox_installed.exists and uninstall_result is failed
+      
+    # Método 3: Usar el registro de Windows para encontrar el desinstalador
+    - name: Buscar desinstalador en el registro
+      win_shell: |
+        $uninstallKeys = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+        foreach ($key in $uninstallKeys) {
+            $app = Get-ItemProperty $key.PSPath
+            if ($app.DisplayName -like "*Firefox*") {
+                if ($app.UninstallString) {
+                    Write-Output $app.UninstallString
+                }
+            }
+        }
+      register: registry_uninstaller
+      when: firefox_installed.exists
+      
+    - name: Ejecutar desinstalador desde registro
+      win_shell: |
+        $uninstallCmd = "{{ registry_uninstaller.stdout | trim }}"
+        if ($uninstallCmd -and $uninstallCmd -ne "") {
+            # Agregar parámetros silenciosos si es necesario
+            if ($uninstallCmd -like "*MsiExec.exe*") {
+                Start-Process "msiexec.exe" -ArgumentList "/x", ($uninstallCmd -split " ")[1], "/quiet" -Wait
+            } else {
+                Start-Process -FilePath $uninstallCmd -ArgumentList "/S" -Wait
+            }
+        }
+      when: firefox_installed.exists and registry_uninstaller.stdout is defined and registry_uninstaller.stdout != ""
+      
+    # Limpiar archivos residuales
+    - name: Eliminar directorio de Firefox
+      win_file:
+        path: "C:\\Program Files\\Mozilla Firefox"
+        state: absent
+      ignore_errors: yes
+      
+    - name: Eliminar directorio de datos de usuario
+      win_file:
+        path: "{{ ansible_env.APPDATA }}\\Mozilla"
+        state: absent
+      ignore_errors: yes
+      
+    - name: Limpiar entradas del registro
+      win_regedit:
+        path: "{{ item }}"
+        state: absent
+      ignore_errors: yes
+      loop:
+        - HKLM:\SOFTWARE\Mozilla
+        - HKCU:\SOFTWARE\Mozilla
+        
+    - name: Verificar desinstalación
+      win_shell: |
+        if (Test-Path "C:\Program Files\Mozilla Firefox\firefox.exe") {
+            Write-Output "FALLO: Firefox aún está presente"
+            exit 1
+        } else {
+            Write-Output "ÉXITO: Firefox ha sido desinstalado"
+            exit 0
+        }
+      register: verification
+      failed_when: verification.rc != 0
+      
+    - name: Mostrar resultado de la desinstalación
+      debug:
+        msg: "{{ verification.stdout }}"
