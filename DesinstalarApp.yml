@@ -2,20 +2,11 @@
 - name: Eliminar Firefox de Windows
   hosts: all
   gather_facts: no
-  vars:
-    firefox_path: "C:\\Program Files\\Mozilla Firefox"
-    firefox_shortcuts:
-      - "C:\\Users\\Public\\Desktop\\Mozilla Firefox.lnk"
-      - "C:\\Users\\Public\\Desktop\\Firefox.lnk"
 
   tasks:
-    - name: Borrar carpeta de Firefox
-      win_file:
-        path: "{{ firefox_path }}"
-        state: absent
-
-    - name: Borrar accesos directos de Firefox
-      win_file:
-        path: "{{ item }}"
-        state: absent
-      loop: "{{ firefox_shortcuts }}"
+    - name: Uninstall 7zip from the exe
+  ansible.windows.win_package:
+    path: C:\Program Files\Mozilla Firefox\uninstall\helper.exe
+    product_id: Mozilla Firefox (x64 es-MX)
+    arguments: /S
+    state: absent
