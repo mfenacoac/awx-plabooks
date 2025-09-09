@@ -29,11 +29,11 @@
         dest: "{{ win_dest }}\\{{ firefox_file }}"
         remote_src: yes
 
-    - name: Ejecutar instalador de Firefox en modo silencioso
-      win_command: '"{{ win_dest }}\\{{ firefox_file }}" /S'
-      args:
-        chdir: "{{ win_dest }}"
-      register: install_result
+    #- name: Ejecutar instalador de Firefox en modo silencioso
+     # win_command: '"{{ win_dest }}\\{{ firefox_file }}" /S'
+      #args:
+       # chdir: "{{ win_dest }}"
+     # register: install_result
 
     - debug:
         var: install_result.stdout
