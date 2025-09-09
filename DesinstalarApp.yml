@@ -5,16 +5,7 @@
 
   tasks:
 
-    - name: Desinstalar Firefox vía uninstall.exe
-      win_command: 'C:\\Program Files\\Mozilla Firefox\\uninstall\\helper.exe /S'
-  
-    - name: Borrar carpeta de Firefox
-      win_file:
-        path: "{{ firefox_path }}"
-        state: absent
-
-    - name: Borrar accesos directos de Firefox
-      win_file:
-        path: "{{ item }}"
-        state: absent
-      loop: "{{ firefox_shortcuts }}"
+    - name: Desinstalar Firefox vía helper.exe
+      win_command: helper.exe /S
+      args:
+        chdir: 'C:\Program Files\Mozilla Firefox\uninstall'
