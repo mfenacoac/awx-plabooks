@@ -6,7 +6,7 @@
   tasks:
     - name: Desinstalar Firefox (x64 es-MX)
       ansible.windows.win_package:
-        path: '"C:\Program Files\Mozilla Firefox\uninstall\helper.exe"'
+        path: "C:\Program Files\Mozilla Firefox\uninstall\helper.exe"
         arguments: '/S'
         state: absent
 
