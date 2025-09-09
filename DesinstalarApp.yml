@@ -11,8 +11,9 @@
         Where-Object { $_.DisplayName -like "Mozilla Firefox*" }).UninstallString
       register: firefox_uninstall
 
-    - name: Ejecutar desinstalador de Firefox
+    - name: Ejecutar desinstalador de Firefox silenciosamente
       ansible.windows.win_shell: |
-        $cmd = "{{ firefox_uninstall.stdout }}".Trim()
-        if ($cmd) { & $cmd /S }
+        if ("{{ firefox_uninstall.stdout | trim }}" -ne "") {
+          & ( "{{ firefox_uninstall.stdout | trim }}" -replace '\r','' -replace '\n','' ) /S
+        }
       when: firefox_uninstall.stdout != ""
