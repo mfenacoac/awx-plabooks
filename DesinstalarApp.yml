@@ -6,7 +6,7 @@
   tasks:
 
     - name: Desinstalar Firefox vía uninstall.exe
-      win_command: 'C:\Program Files\Mozilla Firefox\uninstall\helper.exe /S'
+      win_command: 'C:\\Program Files\\Mozilla Firefox\\uninstall\\helper.exe /S'
   
     - name: Borrar carpeta de Firefox
       win_file:
