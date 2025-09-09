@@ -20,6 +20,10 @@
         - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\tmp
         - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\data
         - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\log
+        - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\deployments\*.deployed
+        - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\deployments\*.undeployed
+        - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\deployments\*.failed
+        - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\deployments\*.isdeploying
 
     #- name: Volver a crear carpeta de logs
       #win_file:
