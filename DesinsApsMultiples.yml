@@ -1,0 +1,21 @@
+- name: Desinstalar múltiples aplicaciones Windows
+  hosts: windows_servers
+  gather_facts: yes
+  
+  vars:
+    applications_to_remove:
+      - name: "Mozilla Firefox"
+        uninstaller: "C:\\Program Files\\Mozilla Firefox\\uninstall\\helper.exe"
+        args: "/S"
+      - name: "Google Chrome"
+        uninstaller: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+        args: "--uninstall --force-uninstall"
+      - name: "Adobe Reader"
+        registry_pattern: "*Adobe*Reader*"
+        
+  tasks:
+    - name: Desinstalar aplicaciones especificadas
+      include_tasks: uninstall_app.yml
+      loop: "{{ applications_to_remove }}"
+      loop_control:
+        loop_var: app
