@@ -1,7 +1,7 @@
 ---
-- name: Ejecutar comando para detener JBoss
-  hosts: all
-  gather_facts: no
+- name: Ping Windows Hosts
+  hosts: all # Or a specific group from your inventory
+  gather_facts: false    # Not required for a simple ping
   tasks:
-    - name: Detener JBoss usando jboss-cli
-      win_shell: C:\jboss-eap-7.4.0\jboss-eap-7.4\bin\jboss-cli.bat --connect command=:shutdown
+    - name: Test connectivity to Windows hosts
+      ansible.windows.win_ping:
