@@ -1,6 +1,6 @@
 ---
 - name: Liberar espacio en disco Windows
-  hosts: windows
+  hosts: all
   gather_facts: no
   tasks:
 
