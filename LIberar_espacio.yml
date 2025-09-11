@@ -33,7 +33,7 @@
         Clear-RecycleBin -Force -ErrorAction SilentlyContinue
       ignore_errors: yes
 
-    - name: Ejecutar Liberador de espacio en disco (Disk Cleanup)
-      win_shell: |
-        cleanmgr /verylowdisk
-      ignore_errors: yes
+    #- name: Ejecutar Liberador de espacio en disco (Disk Cleanup)
+     # win_shell: |
+       # cleanmgr /verylowdisk
+    #  ignore_errors: yes
