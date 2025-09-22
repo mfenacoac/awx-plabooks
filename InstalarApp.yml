@@ -1,12 +1,11 @@
 - name: Instalar Firefox desde Nginx/HTTP en Windows
   hosts: all
   gather_facts: no
+  strategy: free  # Permite ejecución independiente por host
   vars:
     win_temp: "C:\\temp"
-    win_dest: "C:\\Program Files\\Mozilla Firefox"
     firefox_file: "firefox_installer.exe"
     firefox_url: "http://10.62.64.22:30080/files/{{ firefox_file }}"
-
   tasks:
     - name: Crear carpeta temporal en Windows
       win_file:
@@ -17,23 +16,21 @@
       win_get_url:
         url: "{{ firefox_url }}"
         dest: "{{ win_temp }}\\{{ firefox_file }}"
+        timeout: 120
 
-    - name: Crear carpeta de destino
-      win_file:
-        path: "{{ win_dest }}"
-        state: directory
-
-    - name: Mover instalador a carpeta de destino
-      win_copy:
-        src: "{{ win_temp }}\\{{ firefox_file }}"
-        dest: "{{ win_dest }}\\{{ firefox_file }}"
-        remote_src: yes
-
-    - name: Ejecutar instalador de Firefox en modo silencioso
-      win_command: '"{{ win_dest }}\\{{ firefox_file }}" /S'
-      args:
-        chdir: "{{ win_dest }}"
+    - name: Instalar Firefox
+      win_package:
+        path: "{{ win_temp }}\\{{ firefox_file }}"
+        arguments: "/S"
+        state: present
       register: install_result
-
+      async: 900  # 15 minutos
+      poll: 15
+      
+    - name: Verificar instalación
+      win_stat:
+        path: "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+      register: firefox_installed
+      
     - debug:
-        var: install_result.stdout
+        msg: "Firefox {{ 'instalado correctamente' if firefox_installed.stat.exists else 'NO se instaló' }}"
