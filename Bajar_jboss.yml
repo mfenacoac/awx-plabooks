@@ -5,7 +5,7 @@
   tasks:
     - name: Detener JBoss usando jboss-cli
       win_shell: >
-        C:\jboss-eap-7.4.0\jboss-eap-7.4\bin\jboss-cli.bat --connect command=:shutdown
+        C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\bin\jboss-cli.bat --connect command=:shutdown
       register: shutdown_result
 
     - name: Esperar 10 segundos para asegurar que JBoss se detuvo
@@ -17,16 +17,16 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\tmp
-        - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\data
-        - C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\log
+        - C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\tmp
+        - C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\data
+        - C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\log
 
     - name: Eliminar archivos de estado de despliegue en JBoss
       win_shell: |
-        Remove-Item -Path 'C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\deployments\*.deployed' -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path 'C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\deployments\*.undeployed' -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path 'C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\deployments\*.failed' -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path 'C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\deployments\*.isdeploying' -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.deployed' -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.undeployed' -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.failed' -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.isdeploying' -Force -ErrorAction SilentlyContinue
 
     #- name: Volver a crear carpeta de logs
       #win_file:
