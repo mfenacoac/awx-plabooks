@@ -12,7 +12,7 @@
       pause:
         seconds: 120
     
-    - name: Borrar CONTENIDO de carpetas tmp y data de JBoss (no las carpetas)
+    - name: Borrar CONTENIDO de carpetas tmp, log y data en JBoss
       win_shell: |
         Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\tmp\*' -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\data\*' -Recurse -Force -ErrorAction SilentlyContinue
