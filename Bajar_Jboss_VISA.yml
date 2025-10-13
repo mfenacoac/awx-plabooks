@@ -1,0 +1,29 @@
+---
+- name: Detener JBoss y limpiar logs
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Detener JBoss usando jboss-cli
+      win_shell: >
+        C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\bin\jboss-cli.bat --connect command=:shutdown
+      register: shutdown_result
+
+    - name: Esperar 120 segundos para asegurar que JBoss se detuvo
+      pause:
+        seconds: 120
+
+    - name: Borrar carpetas tmp y data de JBoss
+      win_file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\tmp
+        - C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\data
+        - C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\log
+
+    - name: Eliminar archivos de estado de despliegue en JBoss
+      win_shell: |
+        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.deployed' -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.undeployed' -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.failed' -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.isdeploying' -Force -ErrorAction SilentlyContinue
