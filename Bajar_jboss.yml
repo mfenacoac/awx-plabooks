@@ -8,9 +8,9 @@
         C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\bin\jboss-cli.bat --connect command=:shutdown
       register: shutdown_result
 
-    - name: Esperar 10 segundos para asegurar que JBoss se detuvo
+    - name: Esperar 120 segundos para asegurar que JBoss se detuvo
       pause:
-        seconds: 10
+        seconds: 120
 
     - name: Borrar carpetas tmp y data de JBoss
       win_file:
