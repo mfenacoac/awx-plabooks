@@ -1,0 +1,11 @@
+---
+- name: Iniciar JBoss en SRVS_VISA
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Iniciar JBoss con script personalizado en segundo plano
+      win_command: cmd /c start "" "C:\Temenos\R18\JBoss_FENA_R20.bat"
+      args:
+        chdir: C:\Temenos\R18
+      async: 10
+      poll: 0
