@@ -2,11 +2,14 @@
 - name: Liberar espacio en disco Windows
   hosts: "{{ target_host.split(':')[0] }}"
   gather_facts: no
+
   tasks:
 
-    - name: Mostrar información recibida
+    - name: Mostrar datos recibidos
       debug:
-        msg: "Target host recibido: {{ target_host }} (limpio: {{ target_host.split(':')[0] }})"
+        msg:
+          - "target_host: {{ target_host }}"
+          - "Servidor limpio: {{ target_host.split(':')[0] }}"
 
     # - name: Limpiar carpeta %TEMP% del usuario actual
     #   win_shell: |
