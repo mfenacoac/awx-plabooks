@@ -1,9 +1,11 @@
+---
 - hosts: localhost
   gather_facts: no
   vars:
     target_ip: "{{ target_host.split(':')[0] }}"
   tasks:
-    - add_host:
+    - name: Agregar host al grupo temporal
+      add_host:
         name: "{{ target_ip }}"
         groups: temp_group
 
@@ -13,3 +15,41 @@
     - name: Ejecutar limpieza
       debug:
         msg: "Ejecutando limpieza en {{ inventory_hostname }}"
+    
+    # - name: Limpiar carpeta %TEMP% del usuario actual
+    #   win_shell: |
+    #     Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+    #   ignore_errors: yes
+    
+    # - name: Limpiar carpeta C:\Windows\Temp
+    #   win_shell: |
+    #     Remove-Item "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+    #   ignore_errors: yes
+    
+    # - name: Limpiar carpeta Prefetch
+    #   win_shell: |
+    #     Remove-Item "C:\Windows\Prefetch\*" -Recurse -Force -ErrorAction SilentlyContinue
+    #   ignore_errors: yes
+    
+    # - name: Limpiar archivos de Windows Update
+    #   win_shell: |
+    #     net stop wuauserv
+    #     net stop bits
+    #     Remove-Item "C:\Windows\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
+    #     net start bits
+    #     net start wuauserv
+    #   ignore_errors: yes
+    
+    # - name: Vaciar papelera de reciclaje
+    #   win_shell: |
+    #     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+    #   ignore_errors: yes
+    
+    - name: Limpiar carpeta C:\NOC
+      win_shell: |
+        Remove-Item "C:\NOC\*" -Recurse -Force -ErrorAction SilentlyContinue
+      ignore_errors: yes
+    
+    - name: Resumen de limpieza completada
+      debug:
+        msg: "Limpieza completada en {{ inventory_hostname }}"
