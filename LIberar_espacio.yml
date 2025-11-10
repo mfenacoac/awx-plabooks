@@ -1,22 +1,17 @@
 ---
-- name: Liberar espacio en disco Windows según alerta
-  hosts: "{{ target_host }}"
+- name: Liberar espacio en disco Windows
+  hosts: "{{ target_host.split(':')[0] }}"
   gather_facts: no
-
   tasks:
 
     - name: Mostrar información recibida
-      win_debug:
-        msg:
-          - "Host objetivo: {{ target_host }}"
-          - "Volumen afectado: {{ volume }}"
-          - "Uso detectado: {{ value }}"
-          - "Resumen: {{ summary }}"
+      debug:
+        msg: "Target host recibido: {{ target_host }} (limpio: {{ target_host.split(':')[0] }})"
 
-    - name: Limpiar carpeta %TEMP% del usuario actual
-      win_shell: |
-        Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
-      ignore_errors: yes
+    # - name: Limpiar carpeta %TEMP% del usuario actual
+    #   win_shell: |
+    #     Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+    #   ignore_errors: yes
 
     # - name: Limpiar carpeta C:\Windows\Temp
     #   win_shell: |
