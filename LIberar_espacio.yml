@@ -1,41 +1,9 @@
 ---
 - name: Liberar espacio en disco Windows
-  hosts: "{{ target_host.split(':')[0] }}"
+  hosts: "{{ (target_host | default('undefined_host')).split(':')[0] }}"
   gather_facts: no
-
   tasks:
 
-    - name: Mostrar datos recibidos
+    - name: Mostrar variable target_host
       debug:
-        msg:
-          - "target_host: {{ target_host }}"
-          - "Servidor limpio: {{ target_host.split(':')[0] }}"
-
-    # - name: Limpiar carpeta %TEMP% del usuario actual
-    #   win_shell: |
-    #     Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
-    #   ignore_errors: yes
-
-    # - name: Limpiar carpeta C:\Windows\Temp
-    #   win_shell: |
-    #     Remove-Item "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
-    #   ignore_errors: yes
-
-    # - name: Limpiar carpeta Prefetch
-    #   win_shell: |
-    #     Remove-Item "C:\Windows\Prefetch\*" -Recurse -Force -ErrorAction SilentlyContinue
-    #   ignore_errors: yes
-
-    # - name: Limpiar archivos de Windows Update
-    #   win_shell: |
-    #     net stop wuauserv
-    #     net stop bits
-    #     Remove-Item "C:\Windows\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
-    #     net start bits
-    #     net start wuauserv
-    #   ignore_errors: yes
-
-    # - name: Vaciar papelera de reciclaje
-    #   win_shell: |
-    #     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-    #   ignore_errors: yes
+        msg: "target_host={{ target_host | default('NO DEFINIDO') }}"
