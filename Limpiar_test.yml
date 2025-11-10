@@ -1,12 +1,21 @@
-- name: Liberar espacio en disco Windows
-  hosts: dynamic_host
+- hosts: localhost
   gather_facts: no
+  vars:
+    target_ip: "{{ target_host.split(':')[0] }}"
   tasks:
-    - name: Validar IP recibida
+    - name: Validar IP
       fail:
         msg: "No es una IP válida: {{ target_host }}"
-      when: target_host is not match('^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(:[0-9]+)?$')
+      when: target_ip is not match('^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
 
+    - name: Agregar host dinámicamente
+      add_host:
+        name: "{{ target_ip }}"
+        groups: temp_group
+
+- hosts: temp_group
+  gather_facts: no
+  tasks:
     - name: Ejecutar limpieza
       debug:
-        msg: "Ejecutando limpieza en {{ target_host.split(':')[0] }}"
+        msg: "Ejecutando limpieza en {{ inventory_hostname }}"
