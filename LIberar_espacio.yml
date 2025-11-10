@@ -1,39 +1,43 @@
 ---
-- name: Liberar espacio en disco Windows
+- name: Liberar espacio en disco Windows según alerta
   hosts: "{{ target_host }}"
   gather_facts: no
+
   tasks:
+
+    - name: Mostrar información recibida
+      win_debug:
+        msg:
+          - "Host objetivo: {{ target_host }}"
+          - "Volumen afectado: {{ volume }}"
+          - "Uso detectado: {{ value }}"
+          - "Resumen: {{ summary }}"
 
     - name: Limpiar carpeta %TEMP% del usuario actual
       win_shell: |
         Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
       ignore_errors: yes
 
-    - name: Limpiar carpeta C:\Windows\Temp
-      win_shell: |
-        Remove-Item "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
-      ignore_errors: yes
+    # - name: Limpiar carpeta C:\Windows\Temp
+    #   win_shell: |
+    #     Remove-Item "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+    #   ignore_errors: yes
 
-    - name: Limpiar carpeta Prefetch
-      win_shell: |
-        Remove-Item "C:\Windows\Prefetch\*" -Recurse -Force -ErrorAction SilentlyContinue
-      ignore_errors: yes
+    # - name: Limpiar carpeta Prefetch
+    #   win_shell: |
+    #     Remove-Item "C:\Windows\Prefetch\*" -Recurse -Force -ErrorAction SilentlyContinue
+    #   ignore_errors: yes
 
-    - name: Limpiar archivos de Windows Update
-      win_shell: |
-        net stop wuauserv
-        net stop bits
-        Remove-Item "C:\Windows\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
-        net start bits
-        net start wuauserv
-      ignore_errors: yes
+    # - name: Limpiar archivos de Windows Update
+    #   win_shell: |
+    #     net stop wuauserv
+    #     net stop bits
+    #     Remove-Item "C:\Windows\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
+    #     net start bits
+    #     net start wuauserv
+    #   ignore_errors: yes
 
-    - name: Vaciar papelera de reciclaje
-      win_shell: |
-        Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-      ignore_errors: yes
-
-    #- name: Ejecutar Liberador de espacio en disco (Disk Cleanup)
-     # win_shell: |
-       # cleanmgr /verylowdisk
-    #  ignore_errors: yes
+    # - name: Vaciar papelera de reciclaje
+    #   win_shell: |
+    #     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+    #   ignore_errors: yes
