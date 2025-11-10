@@ -3,7 +3,7 @@
   hosts: "{{ (target_host | default('undefined_host')).split(':')[0] }}"
   gather_facts: no
   tasks:
-
-    - name: Mostrar variable target_host
-      debug:
-        msg: "target_host={{ target_host | default('NO DEFINIDO') }}"
+  - name: Validar host recibido
+    fail:
+      msg: "No es una IP válida: {{ target_host }}"
+    when: target_host is not match('^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(:[0-9]+)?$')
