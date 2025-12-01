@@ -1,58 +1,57 @@
 ---
 - name: Desinstalar Windows Exporter de todos los servidores Windows
-  hosts: SRVS_APPL
+  hosts: windows
   gather_facts: no
 
   tasks:
 
     - name: Verificar si existe el servicio windows_exporter
-      win_service_info:
-        name: windows_exporter
-      register: service_exporter
+      ansible.windows.win_service_facts:
+      register: service_facts
 
     - name: Detener servicio windows_exporter si existe
-      win_service:
+      ansible.windows.win_service:
         name: windows_exporter
         state: stopped
-      when: service_exporter.exists
+      when: "'windows_exporter' in service_facts.services"
 
-    - name: Desinstalar servicio windows_exporter si existe
-      win_command: 'sc.exe delete windows_exporter'
-      when: service_exporter.exists
+    - name: Eliminar servicio windows_exporter si existe
+      ansible.windows.win_command: 'sc.exe delete windows_exporter'
+      when: "'windows_exporter' in service_facts.services"
 
     - name: Desinstalar Windows Exporter si fue instalado por MSI
-      win_package:
+      ansible.windows.win_package:
         name: "windows_exporter"
         state: absent
       ignore_errors: yes
 
     - name: Desinstalar Windows Exporter si fue instalado con Chocolatey
-      win_chocolatey:
+      ansible.windows.win_chocolatey:
         name: windows-exporter
         state: absent
       ignore_errors: yes
 
-    - name: Eliminar carpeta de instalación común (C:\Program Files\windows_exporter)
-      win_file:
+    - name: Eliminar carpeta de instalación común
+      ansible.windows.win_file:
         path: "C:\\Program Files\\windows_exporter"
         state: absent
 
-    - name: Eliminar carpeta de instalación alternativa (C:\windows_exporter)
-      win_file:
+    - name: Eliminar carpeta alternativa
+      ansible.windows.win_file:
         path: "C:\\windows_exporter"
         state: absent
 
-    - name: Eliminar ejecutable si quedó suelto
-      win_file:
+    - name: Eliminar ejecutable suelto
+      ansible.windows.win_file:
         path: "C:\\Program Files\\windows_exporter.exe"
         state: absent
 
-    - name: Eliminar configuraciones antiguas (si existieran)
-      win_file:
+    - name: Eliminar configuraciones antiguas
+      ansible.windows.win_file:
         path: "C:\\ProgramData\\windows_exporter"
         state: absent
 
-    - name: Reiniciar winrm para limpiar sesiones
-      win_service:
+    - name: Reiniciar winrm
+      ansible.windows.win_service:
         name: winrm
         state: restarted
