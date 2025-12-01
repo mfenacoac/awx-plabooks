@@ -1,55 +1,29 @@
 ---
-- name: Desinstalar Windows Exporter de todos los servidores Windows
-  hosts: windows
+- name: Desinstalar Windows Exporter
+  hosts: "{{ target_hosts }}"
   gather_facts: no
-
-  collections:
-    - ansible.windows
 
   tasks:
 
-    - name: Obtener información de servicios
-      win_service_facts:
-      register: service_facts
-
     - name: Detener servicio windows_exporter si existe
-      win_service:
-        name: windows_exporter
-        state: stopped
-      when: "'windows_exporter' in service_facts.services"
+    win_command: 'sc.exe stop windows_exporter'
+      ignore_errors: yes
 
     - name: Eliminar servicio windows_exporter
       win_command: 'sc.exe delete windows_exporter'
-      when: "'windows_exporter' in service_facts.services"
-
-    - name: Desinstalar Windows Exporter MSI
-      win_package:
-        name: "windows_exporter"
-        state: absent
       ignore_errors: yes
 
-    - name: Desinstalar Windows Exporter de Chocolatey
-      win_chocolatey:
-        name: windows-exporter
-        state: absent
+    - name: Eliminar carpeta del programa si existe
+      win_shell: |
+        if (Test-Path "C:\Program Files\windows_exporter") {
+            Remove-Item -Path "C:\Program Files\windows_exporter" -Recurse -Force
+        }
       ignore_errors: yes
 
-    - name: Eliminar carpeta Program Files
-      win_file:
-        path: "C:\\Program Files\\windows_exporter"
-        state: absent
+    - name: Confirmar que el servicio ya no existe
+      win_command: 'sc.exe query windows_exporter'
+      register: result
+      failed_when: false
 
-    - name: Eliminar carpeta raíz
-      win_file:
-        path: "C:\\windows_exporter"
-        state: absent
-
-    - name: Eliminar ejecutable suelto
-      win_file:
-        path: "C:\\Program Files\\windows_exporter.exe"
-        state: absent
-
-    - name: Reiniciar WinRM
-      win_service:
-        name: winrm
-        state: restarted
+    - debug:
+        msg: "Resultado final del estado del servicio: {{ result.stdout }}"
