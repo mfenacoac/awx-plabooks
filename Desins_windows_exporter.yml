@@ -1,6 +1,6 @@
 ---
 - name: Desinstalar Windows Exporter
-  hosts: "{{ target_hosts }}"
+  hosts: all
   gather_facts: no
 
   tasks:
