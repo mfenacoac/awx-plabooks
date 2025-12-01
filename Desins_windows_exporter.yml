@@ -1,6 +1,6 @@
 ---
 - name: Desinstalar Windows Exporter de todos los servidores Windows
-- hosts: "{{ survey_hosts }}"
+  hosts: SRVS_APPL
   gather_facts: no
 
   tasks:
