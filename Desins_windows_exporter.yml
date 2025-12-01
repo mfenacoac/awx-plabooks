@@ -6,7 +6,7 @@
   tasks:
 
     - name: Detener servicio windows_exporter si existe
-    win_command: 'sc.exe stop windows_exporter'
+      win_command: 'sc.exe stop windows_exporter'
       ignore_errors: yes
 
     - name: Eliminar servicio windows_exporter
