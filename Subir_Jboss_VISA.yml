@@ -1,6 +1,6 @@
 ---
 - name: Iniciar JBoss en SRVS_VISA
-  hosts: {{ subir_visa }}
+  hosts: "{{ subir_visa }}"
   gather_facts: no
   tasks:
     - name: Iniciar JBoss con script personalizado en segundo plano
