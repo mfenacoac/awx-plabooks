@@ -1,6 +1,6 @@
 ---
 - name: Desinstalar Windows Exporter
-  hosts: all
+  hosts: {{ win_exporter_srvs }}
   gather_facts: no
 
   tasks:
