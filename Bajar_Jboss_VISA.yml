@@ -1,6 +1,6 @@
 ---
 - name: Detener JBoss y limpiar logs
-  hosts: all
+  hosts: "{{ visa_bajar }}"
   gather_facts: no
   tasks:
     - name: Detener JBoss usando jboss-cli
