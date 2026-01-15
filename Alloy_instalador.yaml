@@ -23,17 +23,17 @@
     register: jboss_dirs
 
 - name: Construir lista dinámica de JBoss
-    ansible.builtin.set_fact:
-      jboss_instances: >-
-        {{
-          jboss_dirs.files
-          | map(attribute='filename')
-          | map('regex_replace',
-                '^(.*)$',
-                '{"name":"\\1","log_path":"C:\\\\Temenos\\\\R18\\\\3rdParty\\\\As\\\\\\1\\\\standalone\\\\log\\\\server.log"}')
-          | map('from_json')
-          | list
-        }}
+  ansible.builtin.set_fact:
+    jboss_instances: >-
+      {{
+        jboss_dirs.files
+        | map(attribute='filename')
+        | map('regex_replace',
+              '^(.*)$',
+              '{"name":"\\1","log_path":"C:\\\\Temenos\\\\R18\\\\3rdParty\\\\As\\\\\\1\\\\standalone\\\\log\\\\server.log"}')
+        | map('from_json')
+        | list
+      }}
 
   - name: Mostrar nombres de JBoss
     debug:
