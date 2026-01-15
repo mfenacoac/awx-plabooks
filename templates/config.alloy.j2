@@ -31,7 +31,9 @@ loki.source.windowsevent "application" {
 // ============================================
 
 local.file_match "{{ jboss.name }}_files" {
-    path         = "{{ jboss.log_path | replace('\\', '/') }}"
+    path_targets = [
+        {"__path__" = "{{ jboss.log_path | replace('\\', '/') }}"}
+    ]
     sync_period = "5s"
 }
 
