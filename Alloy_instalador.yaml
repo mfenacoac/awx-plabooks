@@ -56,9 +56,15 @@
   # ------------------------------------------------------------
   # 3. Descargar Alloy ZIP desde GitHub (solo AWX necesita internet)
   # ------------------------------------------------------------
-  - name: Descargar Alloy (ZIP)
-    ansible.windows.win_get_url:
+  - name: Descargar Alloy en el controlador AWX
+    delegate_to: localhost
+    get_url:
       url: "{{ alloy_download_url }}/{{ alloy_zip }}"
+      dest: "/tmp/{{ alloy_zip }}"
+
+  - name: Copiar Alloy al servidor Windows
+    ansible.windows.win_copy:
+      src: "/tmp/{{ alloy_zip }}"
       dest: "{{ alloy_install_dir }}\\{{ alloy_zip }}"
 
   # ------------------------------------------------------------
