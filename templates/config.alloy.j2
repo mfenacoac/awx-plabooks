@@ -1,73 +1,115 @@
-logging {
-  level = "info"
-}
+// ============================================
+// MÉTRICAS DE WINDOWS
+// ============================================
 
-############################
-# Windows Exporter
-############################
 prometheus.exporter.windows "default" {
   enabled_collectors = [
-    "cpu", "cs", "logical_disk", "net", "os",
-    "system", "cpu_info", "memory", "time",
+    "cpu",
+    "cs",
+    "logical_disk",
+    "net",
+    "os",
+    "system",
+    "cpu_info",
+    "memory",
+    "time",
   ]
 }
 
-############################
-# Windows Event Logs
-############################
+// ============================================
+// LOGS DEL SISTEMA WINDOWS
+// ============================================
+
 loki.source.windowsevent "application" {
-  eventlog_name = "Application"
-  forward_to    = [loki.write.endpoint.receiver]
+    eventlog_name = "Application"
+    forward_to    = [loki.write.endpoint.receiver]
 }
 
-############################
-# JBoss Logs (dinámico)
-############################
 {% for jboss in jboss_instances %}
+// ============================================
+// JBOSS - {{ jboss.name }}
+// ============================================
+
 local.file_match "{{ jboss.name }}_files" {
-  "__path__"    = "{{ jboss.log_path | replace('\\', '/') }}"
-  sync_period  = "5s"
+    path         = "{{ jboss.log_path | replace('\\', '/') }}"
+    sync_period = "5s"
 }
 
 loki.source.file "{{ jboss.name }}_scrape" {
-  targets        = local.file_match.{{ jboss.name }}_files.targets
-  tail_from_end  = true
-  forward_to     = [loki.process.{{ jboss.name }}_processor.receiver]
+    targets       = local.file_match.{{ jboss.name }}_files.targets
+    forward_to    = [loki.process.{{ jboss.name }}_processor.receiver]
+    tail_from_end = true
 }
 
 loki.process "{{ jboss.name }}_processor" {
 
-  stage.regex {
-    expression = ".*span_id=(?P<span_id>[a-f0-9]{16}).*trace_id=(?P<trace_id>[a-f0-9]{32}).*"
-  }
-
-  stage.labels {
-    values = {
-      trace_id = ""
-      span_id  = ""
+    stage.regex {
+        expression = ".*span_id=(?P<span_id>[a-f0-9]{16}).*trace_id=(?P<trace_id>[a-f0-9]{32}).*"
     }
-  }
 
-  stage.static_labels {
-    values = {
-      job            = "JBOSS_APPL"
-      service_name   = "JBOSS-APPL"
-      environment    = "{{ environment }}"
-      hostname       = sys.env("COMPUTERNAME")
-      instance       = "{{ ansible_host }}"
-      jboss_instance = "{{ jboss.name }}"
+    stage.labels {
+        values = {
+            trace_id = "",
+            span_id  = "",
+        }
     }
-  }
 
-  forward_to = [loki.write.endpoint.receiver]
+    stage.static_labels {
+        values = {
+            job            = "JBOSS_APPL",
+            filename       = "log_{{ jboss.name }}",
+            service_name   = "JBOSS-APPL",
+            environment    = "production",
+            hostname       = sys.env("COMPUTERNAME"),
+            instance       = "{{ ansible_host }}",
+            jboss_instance = "{{ jboss.name }}",
+        }
+    }
+
+    forward_to = [loki.write.endpoint.receiver]
 }
 {% endfor %}
 
-############################
-# Loki Endpoint
-############################
+// ============================================
+// ENDPOINT LOKI
+// ============================================
+
 loki.write "endpoint" {
-  endpoint {
-    url = "http://10.138.12.21:3100/loki/api/v1/push"
-  }
+    endpoint {
+        url = "http://10.138.12.21:3100/loki/api/v1/push"
+
+        retry_on_http_429 = true
+        max_backoff_period = "5m"
+        min_backoff_period = "1s"
+    }
+
+    external_labels = {
+        cluster    = "production",
+        datacenter = "main",
+    }
+}
+
+// ============================================
+// ENDPOINT PROMETHEUS
+// ============================================
+
+prometheus.remote_write "default" {
+    endpoint {
+        url = "http://10.138.7.20:9090/api/v1/write"
+
+        queue_config {
+            capacity              = 10000
+            max_shards            = 50
+            min_shards            = 1
+            max_samples_per_send  = 5000
+            batch_send_deadline   = "5s"
+            min_backoff           = "30ms"
+            max_backoff           = "5s"
+        }
+    }
+
+    external_labels = {
+        cluster    = "production",
+        datacenter = "main",
+    }
 }
