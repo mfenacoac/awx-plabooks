@@ -1,1 +1,27 @@
+- name: POC - Descubrir nombres de JBoss
+  hosts: all
+  gather_facts: no
 
+  tasks:
+  - name: Buscar carpetas JBoss
+    win_find:
+      paths: C:\Temenos\R18\3rdParty\As
+      file_type: directory
+      patterns: "T24Prod*"
+    register: jboss_dirs
+
+  - name: Mostrar rutas encontradas
+    debug:
+      var: jboss_dirs.files
+
+  - name: Extraer solo nombres de JBoss
+    set_fact:
+      jboss_instances: >-
+        {{ jboss_dirs.files
+           | map(attribute='path')
+           | map('basename')
+           | list }}
+
+  - name: Mostrar nombres de JBoss
+    debug:
+      msg: "JBoss detectados: {{ jboss_instances }}"
