@@ -78,15 +78,32 @@
   # ------------------------------------------------------------
   # 6. Verificar instalación de Alloy
   # ------------------------------------------------------------
-  - name: Verificar binario de Alloy instalado
-    win_stat:
-      path: "{{ alloy_install_dir }}\\alloy.exe"
-    register: alloy_installed
+  - name: Verificar servicio Alloy
+    win_service:
+      name: Alloy
+    register: alloy_service
 
-  - name: Fallar si Alloy no se instaló
+  - name: Fallar si Alloy no está instalado
     fail:
-      msg: "Grafana Alloy no se instaló correctamente"
-    when: not alloy_installed.stat.exists
+      msg: "Grafana Alloy no está instalado o el servicio no existe"
+    when: alloy_service.exists == false
+
+  - name: Asegurar que Alloy esté en ejecución
+    win_service:
+      name: Alloy
+      state: started
+      start_mode: delayed
+
+  - name: Aplicar config.alloy personalizado
+    win_template:
+      src: templates/config.alloy.j2
+      dest: "{{ alloy_install_dir }}\\config.alloy"
+      force: yes
+
+  - name: Reiniciar servicio Alloy
+    win_service:
+      name: Alloy
+      state: restarted
 
   # ------------------------------------------------------------
   # 7. Generar config.alloy dinámico
