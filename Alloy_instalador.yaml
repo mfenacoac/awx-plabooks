@@ -64,10 +64,10 @@
   # ------------------------------------------------------------
   # 4. Descomprimir Alloy
   # ------------------------------------------------------------
-  - name: Descomprimir Alloy
-    ansible.windows.win_unzip:
-      src: "{{ alloy_install_dir }}\\{{ alloy_zip }}"
-      dest: "{{ alloy_install_dir }}"
+  - name: Descomprimir Alloy con PowerShell
+    ansible.windows.win_shell: >
+      Expand-Archive -Path "{{ alloy_install_dir }}\\{{ alloy_zip }}" -DestinationPath "{{ alloy_install_dir }}" -Force
+    args:
       creates: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
 
   # ------------------------------------------------------------
