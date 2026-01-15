@@ -56,7 +56,6 @@ loki.process "{{ jboss.name }}_processor" {
       hostname       = sys.env("COMPUTERNAME")
       instance       = "{{ ansible_host }}"
       jboss_instance = "{{ jboss.name }}"
-      client         = "{{ client }}"
     }
   }
 
