@@ -26,13 +26,13 @@
     set_fact:
       jboss_instances: []
 
- - name: Construir lista dinámica de JBoss
-   set_fact:
-     jboss_instances: "{{ jboss_instances + [ {
-       'name': item.filename,
-       'log_path': jboss_base_path ~ '\\' ~ item.filename ~ '\\standalone\\log\\server.log'
-     } ] }}"
-   loop: "{{ jboss_dirs.files }}"
+  - name: Construir lista dinámica de JBoss
+    set_fact:
+      jboss_instances: "{{ jboss_instances + [ {
+        'name': item.filename,
+        'log_path': jboss_base_path ~ '\\' ~ item.filename ~ '\\standalone\\log\\server.log'
+      } ] }}"
+    loop: "{{ jboss_dirs.files }}"
 
 
   - name: Mostrar instancias JBoss detectadas
