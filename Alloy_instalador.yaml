@@ -8,7 +8,6 @@
     alloy_exe: "Alloy_agente.exe"
     alloy_config_file: "config.alloy"
 
-    alloy_download_url: "http://10.138.12.21:30080/files"
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
 
   tasks:
@@ -18,7 +17,7 @@
   # ------------------------------------------------------------
   - name: Buscar instancias JBoss
     ansible.windows.win_find:
-      paths: C:\Temenos\R18\3rdParty\As
+      paths: "{{ jboss_base_path }}"
       file_type: directory
     register: jboss_dirs
 
@@ -34,7 +33,6 @@
       } ] }}"
     loop: "{{ jboss_dirs.files }}"
 
-
   - name: Mostrar instancias JBoss detectadas
     debug:
       var: jboss_instances
@@ -48,85 +46,69 @@
   # 2. Crear directorio de instalación
   # ------------------------------------------------------------
   - name: Crear directorio de instalación de Alloy
-    win_file:
+    ansible.windows.win_file:
       path: "{{ alloy_install_dir }}"
       state: directory
 
   # ------------------------------------------------------------
-  # 3. Verificar si Alloy ya está descargado
+  # 3. Copiar instalador Alloy DESDE AWX
   # ------------------------------------------------------------
-  - name: Verificar binario del instalador
-    win_stat:
-      path: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
-    register: alloy_installer
-
-  # ------------------------------------------------------------
-  # 4. Descargar Alloy desde Nginx
-  # ------------------------------------------------------------
-  - name: Descargar instalador de Alloy
-    win_get_url:
-      url: "{{ alloy_download_url }}/{{ alloy_exe }}"
+  - name: Copiar instalador de Alloy desde AWX
+    ansible.windows.win_copy:
+      src: installers/{{ alloy_exe }}
       dest: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
-    when: not alloy_installer.stat.exists
 
   # ------------------------------------------------------------
-  # 5. Ejecutar instalador de Alloy
+  # 4. Ejecutar instalador de Alloy
   # ------------------------------------------------------------
   - name: Ejecutar instalador de Grafana Alloy
-    win_shell: >
+    ansible.windows.win_shell: >
       Start-Process -FilePath ".\\{{ alloy_exe }}" -ArgumentList "/S" -Wait
     args:
       chdir: "{{ alloy_install_dir }}"
       executable: powershell.exe
 
   # ------------------------------------------------------------
-  # 6. Verificar instalación de Alloy
+  # 5. Verificar servicio Alloy
   # ------------------------------------------------------------
   - name: Verificar servicio Alloy
-    win_service:
+    ansible.windows.win_service:
       name: Alloy
     register: alloy_service
 
   - name: Fallar si Alloy no está instalado
     fail:
       msg: "Grafana Alloy no está instalado o el servicio no existe"
-    when: alloy_service.exists == false
+    when: not alloy_service.exists
 
   - name: Asegurar que Alloy esté en ejecución
-    win_service:
+    ansible.windows.win_service:
       name: Alloy
       state: started
       start_mode: delayed
 
-  - name: Aplicar config.alloy personalizado
-    win_template:
-      src: templates/config.alloy.j2
-      dest: "{{ alloy_install_dir }}\\config.alloy"
+  # ------------------------------------------------------------
+  # 6. Generar config.alloy dinámico
+  # ------------------------------------------------------------
+  - name: Aplicar config.alloy dinámico
+    ansible.windows.win_template:
+      src: config.alloy.j2
+      dest: "{{ alloy_install_dir }}\\{{ alloy_config_file }}"
       force: yes
 
   - name: Reiniciar servicio Alloy
-    win_service:
+    ansible.windows.win_service:
       name: Alloy
       state: restarted
 
   # ------------------------------------------------------------
-  # 7. Generar config.alloy dinámico
-  # ------------------------------------------------------------
-  - name: Crear config.alloy dinámico
-    win_template:
-      src: config.alloy.j2
-      dest: "{{ alloy_install_dir }}\\{{ alloy_config_file }}"
-
-  # ------------------------------------------------------------
-  # 8. Mostrar config generada (debug)
+  # 7. Debug de config generada
   # ------------------------------------------------------------
   - name: Mostrar contenido de config.alloy
-    win_shell: |
+    ansible.windows.win_shell: |
       type "{{ alloy_install_dir }}\\{{ alloy_config_file }}"
     register: alloy_config_out
 
   - name: Mostrar salida de config.alloy
     debug:
       var: alloy_config_out.stdout
-
-
