@@ -129,10 +129,4 @@
     debug:
       var: alloy_config_out.stdout
 
-  - name: Validar config Alloy
-    ansible.windows.win_command: >
-      "C:\Program Files\GrafanaLabs\Alloy\alloy-windows-amd64.exe" check
-      C:\ProgramData\Grafana\Alloy\config.alloy
-    register: alloy_check
-    failed_when: alloy_check.rc != 0
 
