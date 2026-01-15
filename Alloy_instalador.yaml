@@ -70,9 +70,9 @@
   # ------------------------------------------------------------
   - name: Ejecutar instalador de Grafana Alloy
     win_shell: |
-      Start-Process -FilePath "{{ alloy_install_dir }}\\{{ alloy_exe }}" `
-                    -ArgumentList "/S" `
-                    -Wait `
+      Start-Process -FilePath "{{ alloy_install_dir }}\\{{ alloy_exe }}"
+                    -ArgumentList "/S"
+                    -Wait
                     -NoNewWindow
     args:
       executable: powershell.exe
