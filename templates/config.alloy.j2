@@ -5,14 +5,12 @@
 prometheus.exporter.windows "default" {
   enabled_collectors = [
     "cpu",
-    "cs",
     "logical_disk",
     "net",
     "os",
     "system",
     "cpu_info",
     "memory",
-    "time",
   ]
 }
 
@@ -74,18 +72,18 @@ loki.process "{{ jboss.name }}_processor" {
 // ============================================
 // ENDPOINT LOKI
 // ============================================
-
 loki.write "endpoint" {
     endpoint {
-        url = "http://10.138.12.21:3100/loki/api/v1/push"
-
+        url = "http://10.138.7.20:3100/loki/api/v1/push"
+        
+        // Reintentos en caso de fallo
         retry_on_http_429 = true
         max_backoff_period = "5m"
         min_backoff_period = "1s"
     }
-
+    
     external_labels = {
-        cluster    = "production",
+        cluster = "production",
         datacenter = "main",
     }
 }
@@ -93,24 +91,23 @@ loki.write "endpoint" {
 // ============================================
 // ENDPOINT PROMETHEUS
 // ============================================
-
 prometheus.remote_write "default" {
     endpoint {
         url = "http://10.138.7.20:9090/api/v1/write"
-
+        
         queue_config {
-            capacity              = 10000
-            max_shards            = 50
-            min_shards            = 1
-            max_samples_per_send  = 5000
-            batch_send_deadline   = "5s"
-            min_backoff           = "30ms"
-            max_backoff           = "5s"
+            capacity = 10000
+            max_shards = 50
+            min_shards = 1
+            max_samples_per_send = 5000
+            batch_send_deadline = "5s"
+            min_backoff = "30ms"
+            max_backoff = "5s"
         }
     }
-
+    
     external_labels = {
-        cluster    = "production",
+        cluster = "production",
         datacenter = "main",
     }
 }
