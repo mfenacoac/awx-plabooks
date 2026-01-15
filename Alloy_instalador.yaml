@@ -30,7 +30,7 @@
     set_fact:
       jboss_instances: "{{ jboss_instances + [ {
         'name': item.filename,
-        'log_path': jboss_base_path ~ '\\' ~ item.filename ~ '\\standalone\\log\\server.log'
+        'log_path': item.path ~ '\\standalone\\log\\server.log'
       } ] }}"
     loop: "{{ jboss_dirs.files }}"
 
