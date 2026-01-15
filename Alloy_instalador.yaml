@@ -77,6 +77,26 @@
     when: alloy_bin.stat.exists
 
   # ------------------------------------------------------------
+  # 5. Instalar Grafana Alloy (ejecutar instalador)
+  # ------------------------------------------------------------
+  - name: Instalar Grafana Alloy
+    win_package:
+      path: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
+      arguments: "/S"
+      state: present
+
+    - name: Verificar binario de Alloy instalado
+    win_stat:
+      path: "C:\\Program Files\\GrafanaLabs\\Alloy\\alloy.exe"
+    register: alloy_installed
+
+  - name: Confirmar instalación de Alloy
+    debug:
+      msg: "Grafana Alloy instalado correctamente"
+    when: alloy_installed.stat.exists
+
+
+  # ------------------------------------------------------------
   # 6. Generar config.alloy dinámico
   # ------------------------------------------------------------
   - name: Crear config.alloy dinámico
