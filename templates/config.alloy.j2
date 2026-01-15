@@ -2,6 +2,9 @@ logging {
   level = "info"
 }
 
+############################
+# Windows Exporter
+############################
 prometheus.exporter.windows "default" {
   enabled_collectors = [
     "cpu", "cs", "logical_disk", "net", "os",
@@ -9,33 +12,39 @@ prometheus.exporter.windows "default" {
   ]
 }
 
+############################
+# Windows Event Logs
+############################
 loki.source.windowsevent "application" {
   eventlog_name = "Application"
-  forward_to = [loki.write.endpoint.receiver]
+  forward_to    = [loki.write.endpoint.receiver]
 }
 
+############################
+# JBoss Logs (dinámico)
+############################
 {% for jboss in jboss_instances %}
 local.file_match "{{ jboss.name }}_files" {
-  "__path__" = "{{ item.log_path | replace('\\', '/') }}"
-}]
-  sync_period = "5s"
+  "__path__"    = "{{ jboss.log_path | replace('\\', '/') }}"
+  sync_period  = "5s"
 }
 
 loki.source.file "{{ jboss.name }}_scrape" {
-  targets = local.file_match.{{ jboss.name }}_files.targets
-  tail_from_end = true
-  forward_to = [loki.process.{{ jboss.name }}_processor.receiver]
+  targets        = local.file_match.{{ jboss.name }}_files.targets
+  tail_from_end  = true
+  forward_to     = [loki.process.{{ jboss.name }}_processor.receiver]
 }
 
 loki.process "{{ jboss.name }}_processor" {
+
   stage.regex {
     expression = ".*span_id=(?P<span_id>[a-f0-9]{16}).*trace_id=(?P<trace_id>[a-f0-9]{32}).*"
   }
 
   stage.labels {
     values = {
-      trace_id = "",
-      span_id  = "",
+      trace_id = ""
+      span_id  = ""
     }
   }
 
@@ -55,6 +64,9 @@ loki.process "{{ jboss.name }}_processor" {
 }
 {% endfor %}
 
+############################
+# Loki Endpoint
+############################
 loki.write "endpoint" {
   endpoint {
     url = "{{ loki_url }}"
