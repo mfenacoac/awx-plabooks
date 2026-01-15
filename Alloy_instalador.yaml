@@ -8,7 +8,7 @@
     alloy_exe: "Alloy_agente.exe"
     alloy_config_file: "config.alloy"
 
-    alloy_download_url: "http://10.62.64.22:30080/files"
+    alloy_download_url: "http://10.138.12.21:30080/files"
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
 
   tasks:
