@@ -22,22 +22,23 @@
       file_type: directory
     register: jboss_dirs
 
+  - name: Inicializar lista de JBoss
+    ansible.builtin.set_fact:
+      jboss_instances: []
+
   - name: Construir lista dinámica de JBoss
     ansible.builtin.set_fact:
-      jboss_instances: >-
-        {{
-          jboss_dirs.files
-          | map(attribute='filename')
-          | map('regex_replace',
-                '^(.*)$',
-                '{"name":"\\1","log_path":"C:\\\\Temenos\\\\R18\\\\3rdParty\\\\As\\\\\\1\\\\standalone\\\\log\\\\server.log"}')
-          | map('from_json')
-          | list
-        }}
+      jboss_instances: "{{ jboss_instances + [ {
+        'name': item.filename,
+        'log_path': 'C:\\Temenos\\R18\\3rdParty\\As\\' ~ item.filename ~ '\\standalone\\log\\server.log'
+      } ] }}"
+    loop: "{{ jboss_dirs.files }}"
 
-  - name: Mostrar nombres de JBoss
+  
+
+  - name: Mostrar instancias JBoss detectadas
     debug:
-      msg: "JBoss detectados: {{ jboss_instances }}"
+      var: jboss_instances
 
   - name: Fallar si no se detectan JBoss
     fail:
