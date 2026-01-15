@@ -23,18 +23,17 @@
     register: jboss_dirs
 
   - name: Inicializar lista de JBoss
-    ansible.builtin.set_fact:
+    set_fact:
       jboss_instances: []
 
-  - name: Construir lista dinámica de JBoss
-    ansible.builtin.set_fact:
-      jboss_instances: "{{ jboss_instances + [ {
-        'name': item.filename,
-        'log_path': 'C:\\Temenos\\R18\\3rdParty\\As\\' ~ item.filename ~ '\\standalone\\log\\server.log'
-      } ] }}"
-    loop: "{{ jboss_dirs.files }}"
+ - name: Construir lista dinámica de JBoss
+   set_fact:
+     jboss_instances: "{{ jboss_instances + [ {
+       'name': item.filename,
+       'log_path': jboss_base_path ~ '\\' ~ item.filename ~ '\\standalone\\log\\server.log'
+     } ] }}"
+   loop: "{{ jboss_dirs.files }}"
 
-  
 
   - name: Mostrar instancias JBoss detectadas
     debug:
