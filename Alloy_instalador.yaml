@@ -42,6 +42,11 @@
     debug:
       msg: "JBoss detectados: {{ jboss_instances }}"
 
+  - name: Fallar si no se detectan JBoss
+  fail:
+    msg: "No se detectaron instancias JBoss en {{ jboss_base_path }}"
+  when: jboss_instances | length == 0
+
   # ------------------------------------------------------------
   # 3. Crear directorio de instalación
   # ------------------------------------------------------------
@@ -57,7 +62,7 @@
     win_get_url:
       url: "{{ alloy_download_url }}/{{ alloy_exe }}"
       dest: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
-
+    when: not alloy_bin.stat.exists
   # ------------------------------------------------------------
   # 5. Verificar binario
   # ------------------------------------------------------------
