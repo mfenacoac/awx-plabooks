@@ -1,3 +1,4 @@
+---
 - name: Instalación Grafana Alloy + config dinámica por JBoss
   hosts: all
   gather_facts: no
@@ -22,14 +23,6 @@
       patterns: "T24Prod*"
     register: jboss_dirs
 
-  - name: Fallar si no se detectan JBoss
-    fail:
-      msg: "No se detectaron instancias JBoss en {{ jboss_base_path }}"
-    when: jboss_dirs.files | length == 0
-
-  # ------------------------------------------------------------
-  # 2. Extraer nombres de JBoss
-  # ------------------------------------------------------------
   - name: Extraer nombres de JBoss
     set_fact:
       jboss_instances: >-
@@ -42,8 +35,13 @@
     debug:
       msg: "JBoss detectados: {{ jboss_instances }}"
 
+  - name: Fallar si no se detectan JBoss
+    fail:
+      msg: "No se detectaron instancias JBoss en {{ jboss_base_path }}"
+    when: jboss_instances | length == 0
+
   # ------------------------------------------------------------
-  # 3. Crear directorio de instalación
+  # 2. Crear directorio de instalación
   # ------------------------------------------------------------
   - name: Crear directorio de instalación de Alloy
     win_file:
@@ -51,15 +49,15 @@
       state: directory
 
   # ------------------------------------------------------------
-  # 4. Verificar si el instalador ya existe
+  # 3. Verificar si Alloy ya está descargado
   # ------------------------------------------------------------
-  - name: Verificar si el instalador de Alloy ya existe
+  - name: Verificar binario del instalador
     win_stat:
       path: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
     register: alloy_installer
 
   # ------------------------------------------------------------
-  # 5. Descargar Alloy desde Nginx (si no existe)
+  # 4. Descargar Alloy desde Nginx
   # ------------------------------------------------------------
   - name: Descargar instalador de Alloy
     win_get_url:
@@ -68,36 +66,32 @@
     when: not alloy_installer.stat.exists
 
   # ------------------------------------------------------------
-  # 6. Ejecutar instalador de Grafana Alloy
+  # 5. Ejecutar instalador de Alloy
   # ------------------------------------------------------------
   - name: Ejecutar instalador de Grafana Alloy
-  win_shell: |
-    Start-Process -FilePath "{{ alloy_install_dir }}\\{{ alloy_exe }}" `
-                  -ArgumentList "/S" `
-                  -Wait `
-                  -NoNewWindow
+    win_shell: |
+      Start-Process -FilePath "{{ alloy_install_dir }}\\{{ alloy_exe }}" `
+                    -ArgumentList "/S" `
+                    -Wait `
+                    -NoNewWindow
     args:
       executable: powershell.exe
 
   # ------------------------------------------------------------
-  # 7. Verificar que Alloy quedó instalado
+  # 6. Verificar instalación de Alloy
   # ------------------------------------------------------------
   - name: Verificar binario de Alloy instalado
     win_stat:
-      path: "C:\\Program Files\\GrafanaLabs\\Alloy\\alloy.exe"
+      path: "{{ alloy_install_dir }}\\alloy.exe"
     register: alloy_installed
 
-  - name: Fallar si Alloy no se instaló correctamente
+  - name: Fallar si Alloy no se instaló
     fail:
       msg: "Grafana Alloy no se instaló correctamente"
     when: not alloy_installed.stat.exists
 
-  - name: Confirmar instalación de Alloy
-    debug:
-      msg: "Grafana Alloy instalado correctamente"
-
   # ------------------------------------------------------------
-  # 8. Generar config.alloy dinámico
+  # 7. Generar config.alloy dinámico
   # ------------------------------------------------------------
   - name: Crear config.alloy dinámico
     win_template:
@@ -105,7 +99,7 @@
       dest: "{{ alloy_install_dir }}\\{{ alloy_config_file }}"
 
   # ------------------------------------------------------------
-  # 9. Mostrar config generada (solo validación)
+  # 8. Mostrar config generada (debug)
   # ------------------------------------------------------------
   - name: Mostrar contenido de config.alloy
     win_shell: |
