@@ -1,15 +1,130 @@
-logging {
-  level = "info"
-}
+// ============================================
+// MÉTRICAS DE WINDOWS
+// ============================================
 
-{% for jboss in jboss_instances %}
-local.file_match "jboss_{{ jboss }}" {
-  path_targets = [
-    {
-      __path__ = "C:/Temenos/R18/3rdParty/As/{{ jboss }}/standalone/log/server.log"
-      jboss     = "{{ jboss }}"
-      host      = "{{ inventory_hostname }}"
-    }
+prometheus.exporter.windows "default" {
+  enabled_collectors = [
+    "cpu",
+    "cs",
+    "logical_disk",
+    "net",
+    "os",
+    "system",
+    "cpu_info",
+    "memory",
+    "time",
   ]
 }
-{% endfor %}
+
+// ============================================
+// LOGS EVENTOS WINDOWS
+// ============================================
+
+loki.source.windowsevent "application" {
+  eventlog_name = "Application"
+  forward_to    = [loki.write.endpoint.receiver]
+}
+
+// ============================================
+// JBOSS 1
+// ============================================
+
+local.file_match "jboss1_files" {
+  path_targets = [
+    {
+      "__path__" = "{{ jboss1_log_path }}"
+    }
+  ]
+  sync_period = "5s"
+}
+
+loki.source.file "jboss1_scrape" {
+  targets       = local.file_match.jboss1_files.targets
+  tail_from_end = true
+  forward_to    = [loki.process.jboss1_processor.receiver]
+}
+
+loki.process "jboss1_processor" {
+
+  stage.regex {
+    expression = ".*span_id=(?P<span_id>[a-f0-9]{16}).*trace_id=(?P<trace_id>[a-f0-9]{32}).*"
+  }
+
+  stage.labels {
+    values = {
+      trace_id = "",
+      span_id  = "",
+    }
+  }
+
+  stage.static_labels {
+    values = {
+      job            = "JBOSS_APPL"
+      service_name   = "JBOSS-APPL"
+      environment    = "{{ environment }}"
+      hostname       = sys.env("COMPUTERNAME")
+      instance       = "{{ instance_ip }}"
+      jboss_instance = "{{ jboss1_name }}"
+      client         = "{{ client }}"
+    }
+  }
+
+  forward_to = [loki.write.endpoint.receiver]
+}
+
+// ============================================
+// JBOSS 2
+// ============================================
+
+local.file_match "jboss2_files" {
+  path_targets = [
+    {
+      "__path__" = "{{ jboss2_log_path }}"
+    }
+  ]
+  sync_period = "5s"
+}
+
+loki.source.file "jboss2_scrape" {
+  targets       = local.file_match.jboss2_files.targets
+  tail_from_end = true
+  forward_to    = [loki.process.jboss2_processor.receiver]
+}
+
+loki.process "jboss2_processor" {
+
+  stage.regex {
+    expression = ".*span_id=(?P<span_id>[a-f0-9]{16}).*trace_id=(?P<trace_id>[a-f0-9]{32}).*"
+  }
+
+  stage.labels {
+    values = {
+      trace_id = "",
+      span_id  = "",
+    }
+  }
+
+  stage.static_labels {
+    values = {
+      job            = "JBOSS_APPL"
+      service_name   = "JBOSS-APPL"
+      environment    = "{{ environment }}"
+      hostname       = sys.env("COMPUTERNAME")
+      instance       = "{{ instance_ip }}"
+      jboss_instance = "{{ jboss2_name }}"
+      client         = "{{ client }}"
+    }
+  }
+
+  forward_to = [loki.write.endpoint.receiver]
+}
+
+// ============================================
+// ENVÍO A LOKI
+// ============================================
+
+loki.write "endpoint" {
+  endpoint {
+    url = "{{ loki_url }}"
+  }
+}
