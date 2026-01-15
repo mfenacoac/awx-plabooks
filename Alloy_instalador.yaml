@@ -5,8 +5,11 @@
 
   vars:
     alloy_install_dir: "C:\\Program Files\\GrafanaLabs\\Alloy"
+    alloy_zip: "Alloy_agente.zip"
     alloy_exe: "Alloy_agente.exe"
     alloy_config_file: "config.alloy"
+
+    alloy_download_url: "https://github.com/mfenacoac/awx-plabooks/releases/download/Alloy"
 
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
 
@@ -51,15 +54,24 @@
       state: directory
 
   # ------------------------------------------------------------
-  # 3. Copiar instalador Alloy DESDE AWX
+  # 3. Descargar Alloy ZIP desde GitHub (solo AWX necesita internet)
   # ------------------------------------------------------------
-  - name: Copiar instalador de Alloy desde AWX
-    ansible.windows.win_copy:
-      src: installers/{{ alloy_exe }}
-      dest: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
+  - name: Descargar Alloy (ZIP)
+    ansible.windows.win_get_url:
+      url: "{{ alloy_download_url }}/{{ alloy_zip }}"
+      dest: "{{ alloy_install_dir }}\\{{ alloy_zip }}"
 
   # ------------------------------------------------------------
-  # 4. Ejecutar instalador de Alloy
+  # 4. Descomprimir Alloy
+  # ------------------------------------------------------------
+  - name: Descomprimir Alloy
+    ansible.windows.win_unzip:
+      src: "{{ alloy_install_dir }}\\{{ alloy_zip }}"
+      dest: "{{ alloy_install_dir }}"
+      creates: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
+
+  # ------------------------------------------------------------
+  # 5. Ejecutar instalador de Alloy
   # ------------------------------------------------------------
   - name: Ejecutar instalador de Grafana Alloy
     ansible.windows.win_shell: >
@@ -69,7 +81,7 @@
       executable: powershell.exe
 
   # ------------------------------------------------------------
-  # 5. Verificar servicio Alloy
+  # 6. Verificar instalación de Alloy
   # ------------------------------------------------------------
   - name: Verificar servicio Alloy
     ansible.windows.win_service:
@@ -88,11 +100,11 @@
       start_mode: delayed
 
   # ------------------------------------------------------------
-  # 6. Generar config.alloy dinámico
+  # 7. Generar config.alloy dinámico
   # ------------------------------------------------------------
   - name: Aplicar config.alloy dinámico
     ansible.windows.win_template:
-      src: config.alloy.j2
+      src: templates/config.alloy.j2
       dest: "{{ alloy_install_dir }}\\{{ alloy_config_file }}"
       force: yes
 
@@ -102,7 +114,7 @@
       state: restarted
 
   # ------------------------------------------------------------
-  # 7. Debug de config generada
+  # 8. Mostrar config generada (debug)
   # ------------------------------------------------------------
   - name: Mostrar contenido de config.alloy
     ansible.windows.win_shell: |
