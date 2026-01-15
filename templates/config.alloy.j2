@@ -1,0 +1,15 @@
+logging {
+  level = "info"
+}
+
+{% for jboss in jboss_instances %}
+local.file_match "jboss_{{ jboss }}" {
+  path_targets = [
+    {
+      __path__ = "C:/Temenos/R18/3rdParty/As/{{ jboss }}/standalone/log/server.log"
+      jboss     = "{{ jboss }}"
+      host      = "{{ inventory_hostname }}"
+    }
+  ]
+}
+{% endfor %}
