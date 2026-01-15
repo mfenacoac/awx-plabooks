@@ -1,5 +1,5 @@
 - name: Instalación Grafana Alloy + config dinámica por JBoss
-  hosts: windows
+  hosts: all
   gather_facts: no
 
   vars:
