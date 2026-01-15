@@ -69,8 +69,11 @@
   # 5. Ejecutar instalador de Alloy
   # ------------------------------------------------------------
   - name: Ejecutar instalador de Grafana Alloy
-    win_command: >
-      "{{ alloy_install_dir }}\\{{ alloy_exe }}" /S
+    win_shell: >
+      Start-Process -FilePath ".\\{{ alloy_exe }}" -ArgumentList "/S" -Wait
+    args:
+      chdir: "{{ alloy_install_dir }}"
+      executable: powershell.exe
 
   # ------------------------------------------------------------
   # 6. Verificar instalación de Alloy
