@@ -68,6 +68,6 @@ loki.process "{{ jboss.name }}_processor" {
 ############################
 loki.write "endpoint" {
   endpoint {
-    url = "{{ loki_url }}"
+    url = "http://10.138.12.21:3100/loki/api/v1/push"
   }
 }
