@@ -8,7 +8,6 @@
     alloy_config_file: "config.alloy"
 
     alloy_download_url: "http://10.62.64.22:30080/files"
-
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
 
   tasks:
@@ -43,9 +42,9 @@
       msg: "JBoss detectados: {{ jboss_instances }}"
 
   - name: Fallar si no se detectan JBoss
-  fail:
-    msg: "No se detectaron instancias JBoss en {{ jboss_base_path }}"
-  when: jboss_instances | length == 0
+    fail:
+      msg: "No se detectaron instancias JBoss en {{ jboss_base_path }}"
+    when: jboss_instances | length == 0
 
   # ------------------------------------------------------------
   # 3. Crear directorio de instalación
@@ -56,22 +55,23 @@
       state: directory
 
   # ------------------------------------------------------------
-  # 4. Descargar Alloy desde Nginx
+  # 4. Verificar binario Alloy
+  # ------------------------------------------------------------
+  - name: Verificar si Alloy ya existe
+    win_stat:
+      path: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
+    register: alloy_bin
+
+  # ------------------------------------------------------------
+  # 5. Descargar Alloy desde Nginx (si no existe)
   # ------------------------------------------------------------
   - name: Descargar ejecutable de Alloy
     win_get_url:
       url: "{{ alloy_download_url }}/{{ alloy_exe }}"
       dest: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
     when: not alloy_bin.stat.exists
-  # ------------------------------------------------------------
-  # 5. Verificar binario
-  # ------------------------------------------------------------
-  - name: Verificar que Alloy fue descargado
-    win_stat:
-      path: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
-    register: alloy_bin
 
-  - name: Validar existencia del ejecutable
+  - name: Confirmar descarga de Alloy
     debug:
       msg: "Alloy descargado correctamente"
     when: alloy_bin.stat.exists
@@ -92,5 +92,6 @@
       type "{{ alloy_install_dir }}\\{{ alloy_config_file }}"
     register: alloy_config_out
 
-  - debug:
+  - name: Mostrar salida de config.alloy
+    debug:
       var: alloy_config_out.stdout
