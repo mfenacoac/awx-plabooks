@@ -1,20 +1,36 @@
-- name: POC - Descubrir nombres de JBoss
-  hosts: all
+- name: Instalación Grafana Alloy + config dinámica por JBoss
+  hosts: windows
   gather_facts: no
 
+  vars:
+    alloy_install_dir: "C:\\Program Files\\GrafanaLabs\\Alloy"
+    alloy_exe: "Alloy_agente.exe"
+    alloy_config_file: "config.alloy"
+
+    alloy_download_url: "http://10.62.64.22:30080/files"
+
+    jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
+
   tasks:
-  - name: Buscar carpetas JBoss
+
+  # ------------------------------------------------------------
+  # 1. Buscar carpetas JBoss
+  # ------------------------------------------------------------
+  - name: Buscar instancias JBoss
     win_find:
-      paths: C:\Temenos\R18\3rdParty\As
+      paths: "{{ jboss_base_path }}"
       file_type: directory
       patterns: "T24Prod*"
     register: jboss_dirs
 
-  - name: Mostrar rutas encontradas
+  - name: Validar rutas encontradas
     debug:
       var: jboss_dirs.files
 
-  - name: Extraer solo nombres de JBoss
+  # ------------------------------------------------------------
+  # 2. Extraer nombres de JBoss
+  # ------------------------------------------------------------
+  - name: Extraer nombres de JBoss
     set_fact:
       jboss_instances: >-
         {{ jboss_dirs.files
@@ -25,3 +41,51 @@
   - name: Mostrar nombres de JBoss
     debug:
       msg: "JBoss detectados: {{ jboss_instances }}"
+
+  # ------------------------------------------------------------
+  # 3. Crear directorio de instalación
+  # ------------------------------------------------------------
+  - name: Crear directorio de instalación de Alloy
+    win_file:
+      path: "{{ alloy_install_dir }}"
+      state: directory
+
+  # ------------------------------------------------------------
+  # 4. Descargar Alloy desde Nginx
+  # ------------------------------------------------------------
+  - name: Descargar ejecutable de Alloy
+    win_get_url:
+      url: "{{ alloy_download_url }}/{{ alloy_exe }}"
+      dest: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
+
+  # ------------------------------------------------------------
+  # 5. Verificar binario
+  # ------------------------------------------------------------
+  - name: Verificar que Alloy fue descargado
+    win_stat:
+      path: "{{ alloy_install_dir }}\\{{ alloy_exe }}"
+    register: alloy_bin
+
+  - name: Validar existencia del ejecutable
+    debug:
+      msg: "Alloy descargado correctamente"
+    when: alloy_bin.stat.exists
+
+  # ------------------------------------------------------------
+  # 6. Generar config.alloy dinámico
+  # ------------------------------------------------------------
+  - name: Crear config.alloy dinámico
+    win_template:
+      src: config.alloy.j2
+      dest: "{{ alloy_install_dir }}\\{{ alloy_config_file }}"
+
+  # ------------------------------------------------------------
+  # 7. Mostrar config generada (solo lectura)
+  # ------------------------------------------------------------
+  - name: Mostrar contenido de config.alloy
+    win_shell: |
+      type "{{ alloy_install_dir }}\\{{ alloy_config_file }}"
+    register: alloy_config_out
+
+  - debug:
+      var: alloy_config_out.stdout
