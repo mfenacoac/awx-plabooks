@@ -22,6 +22,7 @@
     ansible.windows.win_find:
       paths: "{{ jboss_base_path }}"
       file_type: directory
+      patterns: "T24*"   # Patron de busqueda
     register: jboss_dirs
 
   - name: Inicializar lista de JBoss
