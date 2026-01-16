@@ -70,6 +70,111 @@ loki.process "{{ jboss.name }}_processor" {
 {% endfor %}
 
 // ============================================
+// LOGS DINÁMICOS DE JBOSS (Detectados por win_find)
+// ============================================
+{% for jboss in jboss_instances %}
+local.file_match "jboss_{{ loop.index }}" {
+    path_targets = [{"__path__" = "{{ jboss.log_path | replace('\\', '\\\\') }}" }]
+    sync_period = "5s"
+}
+
+loki.source.file "jboss_scrape_{{ loop.index }}" {
+    targets = local.file_match.jboss_{{ loop.index }}.targets
+    forward_to = [loki.write.endpoint.receiver]
+    tail_from_end = true
+    
+    // Etiquetas específicas para JBoss
+    labels = {
+        job = "jboss_logs",
+        instance = "{{ ansible_host }}",
+        server_name = "{{ jboss.name }}",
+        hostname = sys.env("COMPUTERNAME"),
+    }
+}
+{% endfor %}
+
+// ============================================
+// LOGS ESTÁTICOS DE TAFJ (Optimizado con bucle)
+// ============================================
+// Definimos la lista de tipos de log para iterar
+{% set tafj_logs = ['database', 'runtime', 'ejb', 'dbimport', 'mdb'] %}
+
+{% for log_type in tafj_logs %}
+local.file_match "tafj_{{ log_type }}_files" {
+    // Nota: Las rutas son estáticas, usamos doble barra invertida para Windows
+    path_targets = [{"__path__" = "C:\\Temenos\\R18\\TAFJ\\log\\{{ log_type }}.log"}]
+    sync_period = "5s"
+}
+
+loki.source.file "tafj_{{ log_type }}_scrape" {
+    targets    = local.file_match.tafj_{{ log_type }}_files.targets
+    forward_to = [loki.process.tafj_{{ log_type }}_processor.receiver]
+    tail_from_end = true
+}
+
+loki.process "tafj_{{ log_type }}_processor" {
+    // 1. Extraer IDs con Regex
+    stage.regex {
+        expression = ".*sessionId=(?P<session_id>[^,}]+).*span_id=(?P<span_id>[a-f0-9]{16}).*trace_id=(?P<trace_id>[a-f0-9]{32}).*"
+    }
+    
+    // 2. Convertir a etiquetas
+    stage.labels {
+        values = {
+            trace_id   = "",
+            span_id    = "",
+            session_id = "",
+        }
+    }
+    
+    // 3. Etiquetas estáticas (Aquí hacemos dinámica la IP)
+    stage.static_labels {
+        values = {
+            job          = "TAFJ",
+            filename     = "log_tafj_{{ log_type }}",
+            log_type     = "{{ log_type }}",
+            service_name = "JBOSS-APPL",
+            environment  = "production",
+            hostname     = sys.env("COMPUTERNAME"),
+            instance     = "{{ ansible_host }}",  // <--- CAMBIO DINÁMICO AQUÍ
+            application  = "T24",
+            client       = "APPL",
+        }
+    }
+    
+    forward_to = [loki.write.endpoint.receiver]
+}
+{% endfor %}
+
+// ============================================
+// LOGS TEMPORALES - Info2 (Suelto porque tiene ruta distinta)
+// ============================================
+local.file_match "temp_files" {
+    path_targets = [{"__path__" = "C:\\temp\\info2.log"}]
+    sync_period = "5s"
+}
+
+loki.source.file "temp_scrape" {
+    targets    = local.file_match.temp_files.targets
+    forward_to = [loki.process.temp_processor.receiver]
+    tail_from_end = false
+}
+
+loki.process "temp_processor" {
+    stage.static_labels {
+        values = {
+            job      = "temp-logs",
+            filename = "log_temp_info2",
+            server   = sys.env("COMPUTERNAME"),
+            instance = "{{ ansible_host }}", // <--- CAMBIO DINÁMICO AQUÍ
+            source   = "info2",
+        }
+    }
+    
+    forward_to = [loki.write.endpoint.receiver]
+}
+
+// ============================================
 // ENDPOINT LOKI
 // ============================================
 loki.write "endpoint" {
@@ -110,4 +215,77 @@ prometheus.remote_write "default" {
         cluster = "production",
         datacenter = "main",
     }
+}
+
+// ============================================
+// TRAZAS - OTLP RECEIVER
+// ============================================
+otelcol.receiver.otlp "default" {
+    grpc {
+        // Usamos 0.0.0.0 para evitar errores de binding si la IP local varía
+        endpoint = "0.0.0.0:4317" 
+    }
+    http {
+        endpoint = "0.0.0.0:4318"
+    }
+    output {
+        metrics = [otelcol.processor.attributes.add_service_info.input]
+        logs    = [otelcol.processor.attributes.add_service_info.input]
+        traces  = [otelcol.processor.attributes.add_service_info.input]
+    }
+}
+
+// Agregar atributos del servicio y host
+otelcol.processor.attributes "add_service_info" {
+    action {
+        key    = "deployment.environment"
+        value  = "production"
+        action = "upsert"
+    }
+    action {
+        key    = "host.ip"
+        value  = "{{ ansible_host }}"  // <--- DATO DINÁMICO (IP del agente)
+        action = "upsert"
+    }
+    action {
+        key    = "cluster"
+        value  = "production"
+        action = "upsert"
+    }
+    
+    output {
+        metrics = [otelcol.processor.batch.default.input]
+        logs    = [otelcol.processor.batch.default.input]
+        traces  = [otelcol.processor.batch.default.input]
+    }
+}
+
+// Procesamiento por lotes (Sin cambios, estándar)
+otelcol.processor.batch "default" {
+    timeout = "5s"
+    send_batch_size = 2048
+    send_batch_max_size = 4096
+    
+    output {
+        metrics = [otelcol.exporter.otlp.tempo.input]
+        logs    = [otelcol.exporter.loki.default.input]
+        traces  = [otelcol.exporter.otlp.tempo.input]
+    }
+}
+
+// Exportar a Tempo (trazas y métricas)
+otelcol.exporter.otlp "tempo" {
+    client {
+        // Esta IP (10.138.7.20) es tu servidor central, se queda fija
+        // (A menos que quieras crear una variable en Ansible llamada 'tempo_server')
+        endpoint = "http://10.138.7.20:4317" 
+        tls {
+            insecure = true
+        }
+    }
+}
+
+// Exportar logs OTLP a Loki
+otelcol.exporter.loki "default" {
+    forward_to = [loki.write.endpoint.receiver]
 }
