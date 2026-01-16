@@ -70,30 +70,6 @@ loki.process "{{ jboss.name }}_processor" {
 {% endfor %}
 
 // ============================================
-// LOGS DINÁMICOS DE JBOSS (Detectados por win_find)
-// ============================================
-{% for jboss in jboss_instances %}
-local.file_match "jboss_{{ loop.index }}" {
-    path_targets = [{"__path__" = "{{ jboss.log_path | replace('\\', '\\\\') }}" }]
-    sync_period = "5s"
-}
-
-loki.source.file "jboss_scrape_{{ loop.index }}" {
-    targets = local.file_match.jboss_{{ loop.index }}.targets
-    forward_to = [loki.write.endpoint.receiver]
-    tail_from_end = true
-    
-    // Etiquetas específicas para JBoss
-    labels = {
-        job = "jboss_logs",
-        instance = "{{ ansible_host }}",
-        server_name = "{{ jboss.name }}",
-        hostname = sys.env("COMPUTERNAME"),
-    }
-}
-{% endfor %}
-
-// ============================================
 // LOGS ESTÁTICOS DE TAFJ (Optimizado con bucle)
 // ============================================
 // Definimos la lista de tipos de log para iterar
