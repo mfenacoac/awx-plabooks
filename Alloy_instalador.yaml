@@ -59,9 +59,11 @@
   # ------------------------------------------------------------
   - name: Descargar Alloy en el controlador AWX
     delegate_to: localhost
+    run_once: true
     get_url:
       url: "{{ alloy_download_url }}/{{ alloy_zip }}"
       dest: "/tmp/{{ alloy_zip }}"
+      mode: '0644'
 
   - name: Copiar Alloy al servidor Windows
     ansible.windows.win_copy:
