@@ -1,5 +1,5 @@
 ---
-- name: Flujo de Mantenimiento JBoss (Stop -> Patch -> Start)
+- name: Flujo de Mantenimiento JBoss (Stop -> Kill -> Patch -> Start)
   hosts: all
   gather_facts: no
 
@@ -8,7 +8,6 @@
     
     # ---------------------------------------------------------
     # CONFIGURACIÓN OPENTELEMETRY A INYECTAR
-    # Usamos %JBOSS_INSTANCE_NAME% como variable que se reemplazará dinámicamente
     # ---------------------------------------------------------
     otel_config_block: |
       rem ========================================
@@ -66,18 +65,14 @@
           exit 0
       }
 
-      # B) CHECK DE PUERTO (Clave para tu prueba y producción)
-      # Verifica si algo escucha en el puerto de administración
+      # B) CHECK DE PUERTO
       $connection = Test-NetConnection -ComputerName localhost -Port $mgmtPort -InformationLevel Quiet
       
       if ($connection) {
           Write-Host "   -> ESTATUS: ACTIVO (Puerto $mgmtPort). Iniciando apagado graceful..."
-          
-          # Comando de apagado via CLI
           $shutdownCmd = "& '$cliScript' --connect --controller=localhost:$mgmtPort command=:shutdown"
           try {
               Invoke-Expression $shutdownCmd
-              # Esperamos 10s para que libere archivos
               Start-Sleep -Seconds 10
           } catch {
               Write-Warning "Error al enviar comando de apagado."
@@ -89,7 +84,30 @@
     when: jboss_dirs.matched > 0
 
   # ----------------------------------------------------------------------
-  # 3. INYECCIÓN DE CONFIGURACIÓN (Lógica Anti-Duplicados)
+  # 3. LIMPIEZA DE VENTANAS "CONGELADAS" (Mata el CMD que pide Enter)
+  # ----------------------------------------------------------------------
+  - name: Matar ventanas CMD antiguas esperando Enter
+    ansible.windows.win_shell: |
+      $instanceName = "{{ item.filename }}"
+      # Patrón basado en el TITLE de tus scripts .bat (R20_T24Prod...)
+      $targetTitle = "*R20_$instanceName*"
+      
+      Write-Host "Buscando ventanas congeladas con título: $targetTitle"
+      
+      $processes = Get-Process | Where-Object { $_.MainWindowTitle -like $targetTitle }
+      
+      if ($processes) {
+          Write-Host "Matando ventana CMD de $instanceName..."
+          $processes | Stop-Process -Force
+          Start-Sleep -Seconds 2
+      } else {
+          Write-Host "No se encontraron ventanas congeladas."
+      }
+    loop: "{{ jboss_dirs.files }}"
+    when: jboss_dirs.matched > 0
+
+  # ----------------------------------------------------------------------
+  # 4. INYECCIÓN DE CONFIGURACIÓN (Lógica Anti-Duplicados)
   # ----------------------------------------------------------------------
   - name: Inyectar configuración OTEL en el .bat
     ansible.windows.win_shell: |
@@ -116,21 +134,31 @@
       $configBlock = $configBlock -replace "%JBOSS_INSTANCE_NAME%", $instanceName
 
       # 3. INSERCIÓN PRECISA
-      # Busca la línea de arranque 'CALL...' ignorando las comentadas (REM)
       $targetLineText = "CALL %JBOSS_HOME%\bin\standalone.bat"
       $regexPattern = "(?m)^[\t ]*" + [regex]::Escape($targetLineText)
       $regex = [regex]$regexPattern
 
       if ($regex.IsMatch($content)) {
-          # Reemplaza SOLO la primera coincidencia (evita duplicados si hay múltiples CALLs)
           $newContent = $regex.Replace($content, "$configBlock`r`n`$0", 1)
           
-          # Backup y guardado
           Copy-Item $batPath "$batPath.bak" -Force
           Set-Content -Path $batPath -Value $newContent
           Write-Host "PATCH APLICADO CORRECTAMENTE en $instanceName"
       } else {
           Write-Warning "No se encontró la línea de arranque activa en $batPath"
       }
+    loop: "{{ jboss_dirs.files }}"
+    when: jboss_dirs.matched > 0
+
+  # ----------------------------------------------------------------------
+  # 5. ARRANQUE NUEVO (Con NOPAUSE y cmd /c start)
+  # ----------------------------------------------------------------------
+  - name: Iniciar JBoss (Modo NOPAUSE)
+    ansible.windows.win_command: >
+      cmd /c "set NOPAUSE=true && start {{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
+    args:
+      chdir: "{{ jboss_base_path }}"
+    async: 10
+    poll: 0
     loop: "{{ jboss_dirs.files }}"
     when: jboss_dirs.matched > 0
