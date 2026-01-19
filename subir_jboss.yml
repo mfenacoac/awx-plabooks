@@ -1,11 +1,45 @@
 ---
-- name: Iniciar JBoss en servidor Windows
+- name: Iniciar Servicios JBoss
   hosts: all
   gather_facts: no
+
+  vars:
+    jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
+
   tasks:
-    - name: Iniciar JBoss en segundo plano con async
-      win_command: cmd /c start "" "C:\jboss-eap-7.4.0\jboss-eap-7.4\bin\standalone.bat"
-      args:
-        chdir: C:\jboss-eap-7.4.0\jboss-eap-7.4\bin
-      async: 10
-      poll: 0
+  # ----------------------------------------------------------------------
+  # 1. IDENTIFICAR INSTANCIAS
+  # ----------------------------------------------------------------------
+  - name: Buscar carpetas de instancias JBoss (T24*)
+    ansible.windows.win_find:
+      paths: "{{ jboss_base_path }}"
+      file_type: directory
+      patterns: "T24*"
+    register: jboss_dirs
+
+  - name: Verificar si se encontraron instancias
+    debug:
+      msg: "Se encontraron {{ jboss_dirs.matched }} instancias para iniciar."
+    when: jboss_dirs.matched > 0
+
+  # ----------------------------------------------------------------------
+  # 2. ARRANQUE ASÍNCRONO
+  # ----------------------------------------------------------------------
+  - name: Iniciar cada instancia JBoss detectada
+    ansible.windows.win_shell: |
+      $instanceName = "{{ item.filename }}"
+      $batFile = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
+      
+      if (Test-Path $batFile) {
+          Write-Host "Iniciando $instanceName..."
+          
+          # Start-Process es vital aquí.
+          # Lanza el cmd.exe en una ventana aparte (o en background) y libera a Ansible inmediatamente.
+          Start-Process -FilePath "cmd.exe" -ArgumentList "/c $batFile" -WorkingDirectory "{{ jboss_base_path }}" -WindowStyle Normal
+          
+          Write-Host "Orden de inicio enviada correctamente para $instanceName."
+      } else {
+          Write-Warning "No se encontró el archivo de arranque: $batFile"
+      }
+    loop: "{{ jboss_dirs.files }}"
+    when: jboss_dirs.matched > 0
