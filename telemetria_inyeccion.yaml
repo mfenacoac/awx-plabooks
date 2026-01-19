@@ -134,17 +134,3 @@
       }
     loop: "{{ jboss_dirs.files }}"
     when: jboss_dirs.matched > 0
-
-  # ----------------------------------------------------------------------
-  # 4. ARRANQUE DE INSTANCIAS
-  # ----------------------------------------------------------------------
-  - name: Iniciar instancias JBoss
-    ansible.windows.win_shell: |
-      $batFile = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
-      
-      Write-Host "Iniciando $batFile..."
-      
-      # Start-Process lanza el proceso independiente para que Ansible no se quede esperando
-      Start-Process -FilePath "cmd.exe" -ArgumentList "/c $batFile" -WorkingDirectory "{{ jboss_base_path }}" -WindowStyle Normal
-    loop: "{{ jboss_dirs.files }}"
-    when: jboss_dirs.matched > 0
