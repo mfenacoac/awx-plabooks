@@ -1,45 +1,59 @@
 ---
-- name: Iniciar Servicios JBoss
+- name: Diagnóstico de Arranque JBoss
   hosts: all
   gather_facts: no
 
   vars:
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
+    telemetry_jar_path: "C:\\telemetry\\opentelemetry-javaagent.jar"
 
   tasks:
-  # ----------------------------------------------------------------------
-  # 1. IDENTIFICAR INSTANCIAS
-  # ----------------------------------------------------------------------
-  - name: Buscar carpetas de instancias JBoss (T24*)
+  # 1. VERIFICAR SI EXISTE EL AGENTE (Causa #1 de fallo)
+  - name: Verificar si existe el JAR de OpenTelemetry
+    ansible.windows.win_stat:
+      path: "{{ telemetry_jar_path }}"
+    register: agent_file
+
+  - name: Alerta si falta el Agente
+    debug:
+      msg: "CRÍTICO: El archivo {{ telemetry_jar_path }} NO EXISTE. JBoss fallará al inicio."
+    when: not agent_file.stat.exists
+
+  # 2. INTENTO DE ARRANQUE CON LOG (Para ver el error real)
+  - name: Identificar instancias
     ansible.windows.win_find:
       paths: "{{ jboss_base_path }}"
       file_type: directory
       patterns: "T24*"
     register: jboss_dirs
 
-  - name: Verificar si se encontraron instancias
-    debug:
-      msg: "Se encontraron {{ jboss_dirs.matched }} instancias para iniciar."
-    when: jboss_dirs.matched > 0
-
-  # ----------------------------------------------------------------------
-  # 2. ARRANQUE ASÍNCRONO
-  # ----------------------------------------------------------------------
-  - name: Iniciar cada instancia JBoss detectada
+  - name: Iniciar JBoss generando log de error
     ansible.windows.win_shell: |
-      $instanceName = "{{ item.filename }}"
       $batFile = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
+      $logFile = "C:\temp\startup_error_{{ item.filename }}.log"
       
-      if (Test-Path $batFile) {
-          Write-Host "Iniciando $instanceName..."
-          
-          # Start-Process es vital aquí.
-          # Lanza el cmd.exe en una ventana aparte (o en background) y libera a Ansible inmediatamente.
-          Start-Process -FilePath "cmd.exe" -ArgumentList "/c $batFile" -WorkingDirectory "{{ jboss_base_path }}" -WindowStyle Normal
-          
-          Write-Host "Orden de inicio enviada correctamente para $instanceName."
-      } else {
-          Write-Warning "No se encontró el archivo de arranque: $batFile"
-      }
+      # Creamos carpeta temp por si acaso
+      New-Item -ItemType Directory -Force -Path "C:\temp" | Out-Null
+      
+      Write-Host "Iniciando $batFile y guardando salida en $logFile..."
+      
+      # Ejecutamos redirigiendo STDOUT y STDERR al archivo de texto
+      # Usamos 'cmd /c' para que ejecute y muera, pero el log quedará grabado.
+      Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$batFile`" > $logFile 2>&1" -WindowStyle Hidden
+      
     loop: "{{ jboss_dirs.files }}"
     when: jboss_dirs.matched > 0
+
+  # 3. LEER EL ERROR (Opcional, para verlo en Ansible)
+  - name: Esperar unos segundos para capturar error
+    pause:
+      seconds: 5
+
+  - name: Leer contenido del log de error
+    ansible.windows.win_shell: |
+      Get-Content "C:\temp\startup_error_*.log" -ErrorAction SilentlyContinue | Select-Object -First 20
+    register: log_content
+    
+  - name: Mostrar error en pantalla
+    debug:
+      var: log_content.stdout_lines
