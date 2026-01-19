@@ -7,7 +7,7 @@
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
     
     # ---------------------------------------------------------
-    # CONFIGURACIÓN OPENTELEMETRY
+    # CONFIGURACIÓN OPENTELEMETRY A INYECTAR
     # ---------------------------------------------------------
     otel_config_block: |
       rem ========================================
@@ -18,7 +18,7 @@
       rem Información del servicio
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.service.name=JBOSS-APPL"
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.resource.attributes=service.name=JBOSS-APPL,service.version=7.2,deployment.environment=production,client=APPL,host.name=%COMPUTERNAME%,jboss.instance=%JBOSS_INSTANCE_NAME%"
-      rem Endpoint local de Alloy
+      rem Endpoint local de Alloy (Escucha en todas las interfaces, enviamos a localhost)
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.exporter.otlp.endpoint=http://127.0.0.1:4318"
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.exporter.otlp.protocol=http/protobuf"
       rem Exportadores
@@ -32,7 +32,7 @@
   # ----------------------------------------------------------------------
   # 1. IDENTIFICACIÓN DE INSTANCIAS
   # ----------------------------------------------------------------------
-  - name: Identificar instancias JBoss
+  - name: Identificar instancias JBoss (Carpetas T24*)
     ansible.windows.win_find:
       paths: "{{ jboss_base_path }}"
       file_type: directory
@@ -40,94 +40,118 @@
     register: jboss_dirs
 
   # ----------------------------------------------------------------------
-  # 2. APAGADO GRACEFUL (Intenta apagar bien primero)
+  # 2. APAGADO GRACEFUL INTELIGENTE (Detecta si está encendido o no)
   # ----------------------------------------------------------------------
-  - name: Detener instancias JBoss (Graceful Shutdown)
+  - name: Detener instancias JBoss (Si el puerto responde)
     ansible.windows.win_shell: |
+      $instancePath = "{{ item.path }}"
+      $instanceName = "{{ item.filename }}"
       $batFile = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
-      $cliScript = "{{ item.path }}\bin\jboss-cli.bat"
+      $cliScript = "$instancePath\bin\jboss-cli.bat"
 
-      # Calcular puerto
+      Write-Host "Verificando estado de $instanceName..."
+
+      # A) Leer offset del .bat para calcular puerto real
       if (Test-Path $batFile) {
           $content = Get-Content $batFile -Raw
           if ($content -match "port-offset=(\d+)") {
-              $mgmtPort = 9990 + [int]$matches[1]
-          } else { $mgmtPort = 9990 }
-      } else { exit 0 }
+              $offset = [int]$matches[1]
+              $mgmtPort = 9990 + $offset
+          } else {
+              $mgmtPort = 9990
+          }
+      } else {
+          Write-Warning "No se encontró el BAT de arranque. Omitiendo shutdown."
+          exit 0
+      }
 
-      # Verificar y Apagar
-      if (Test-NetConnection -ComputerName localhost -Port $mgmtPort -InformationLevel Quiet) {
-          Write-Host "Apagando {{ item.filename }}..."
-          & '$cliScript' --connect --controller=localhost:$mgmtPort command=:shutdown
-          Start-Sleep -Seconds 10
+      # B) CHECK DE PUERTO
+      $connection = Test-NetConnection -ComputerName localhost -Port $mgmtPort -InformationLevel Quiet
+      
+      if ($connection) {
+          Write-Host "   -> ESTATUS: ACTIVO (Puerto $mgmtPort). Iniciando apagado graceful..."
+          $shutdownCmd = "& '$cliScript' --connect --controller=localhost:$mgmtPort command=:shutdown"
+          try {
+              Invoke-Expression $shutdownCmd
+              Start-Sleep -Seconds 10
+          } catch {
+              Write-Warning "Error al enviar comando de apagado."
+          }
+      } else {
+          Write-Host "   -> ESTATUS: DETENIDO (Puerto $mgmtPort cerrado). Continuando..."
       }
     loop: "{{ jboss_dirs.files }}"
     when: jboss_dirs.matched > 0
 
   # ----------------------------------------------------------------------
-  # 3. LIMPIEZA FORZADA (CORREGIDO: Busca por CommandLine)
+  # 3. LIMPIEZA DE VENTANAS "CONGELADAS" (Mata el CMD que pide Enter)
   # ----------------------------------------------------------------------
-  - name: Matar procesos CMD huérfanos de JBoss
+  - name: Matar ventanas CMD antiguas esperando Enter
     ansible.windows.win_shell: |
       $instanceName = "{{ item.filename }}"
-      # Buscamos coincidencias en la ruta del archivo .bat
-      $targetScript = "JBoss_$instanceName"
+      # Patrón basado en el TITLE de tus scripts .bat (R20_T24Prod...)
+      $targetTitle = "*R20_$instanceName*"
       
-      Write-Host "Buscando procesos CMD ejecutando: $targetScript"
+      Write-Host "Buscando ventanas congeladas con título: $targetTitle"
       
-      # Usamos WMI/CIM para ver la linea de comandos real
-      $orphans = Get-CimInstance Win32_Process -Filter "Name = 'cmd.exe'" | Where-Object { $_.CommandLine -like "*$targetScript*" }
+      $processes = Get-Process | Where-Object { $_.MainWindowTitle -like $targetTitle }
       
-      if ($orphans) {
-          Write-Host "Matando $($orphans.Count) procesos huérfanos..."
-          foreach ($proc in $orphans) {
-              # Matamos el proceso CMD
-              Invoke-CimMethod -InputObject $proc -MethodName Terminate
-          }
+      if ($processes) {
+          Write-Host "Matando ventana CMD de $instanceName..."
+          $processes | Stop-Process -Force
           Start-Sleep -Seconds 2
       } else {
-          Write-Host "No se encontraron procesos CMD colgados."
+          Write-Host "No se encontraron ventanas congeladas."
       }
     loop: "{{ jboss_dirs.files }}"
     when: jboss_dirs.matched > 0
 
   # ----------------------------------------------------------------------
-  # 4. INYECCIÓN DE CONFIGURACIÓN
+  # 4. INYECCIÓN DE CONFIGURACIÓN (Lógica Anti-Duplicados)
   # ----------------------------------------------------------------------
   - name: Inyectar configuración OTEL en el .bat
     ansible.windows.win_shell: |
       $batPath = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
       $instanceName = "{{ item.filename }}"
       
-      if (-not (Test-Path $batPath)) { exit 1 }
+      if (-not (Test-Path $batPath)) {
+          Write-Error "El archivo $batPath no existe."
+          exit 1
+      }
 
       $content = Get-Content -Path $batPath -Raw
       
+      # 1. IDEMPOTENCIA RÁPIDA
       if ($content -match "OpenTelemetry Java Agent") {
-          Write-Host "Config ya existente."
+          Write-Host "Configuración ya existente en $instanceName. Omitiendo parcheo."
           exit 0
       }
 
+      # 2. Preparar bloque de texto
       $configBlock = @"
       {{ otel_config_block }}
       "@
       $configBlock = $configBlock -replace "%JBOSS_INSTANCE_NAME%", $instanceName
 
+      # 3. INSERCIÓN PRECISA
       $targetLineText = "CALL %JBOSS_HOME%\bin\standalone.bat"
       $regexPattern = "(?m)^[\t ]*" + [regex]::Escape($targetLineText)
       $regex = [regex]$regexPattern
 
       if ($regex.IsMatch($content)) {
           $newContent = $regex.Replace($content, "$configBlock`r`n`$0", 1)
+          
           Copy-Item $batPath "$batPath.bak" -Force
           Set-Content -Path $batPath -Value $newContent
-          Write-Host "PATCH APLICADO"
+          Write-Host "PATCH APLICADO CORRECTAMENTE en $instanceName"
+      } else {
+          Write-Warning "No se encontró la línea de arranque activa en $batPath"
       }
     loop: "{{ jboss_dirs.files }}"
     when: jboss_dirs.matched > 0
 
   # ----------------------------------------------------------------------
-  # 5. ARRANQUE NUEVO
+  # 5. ARRANQUE NUEVO (Con NOPAUSE y cmd /c start)
   # ----------------------------------------------------------------------
   - name: Iniciar JBoss (Modo NOPAUSE)
     ansible.windows.win_command: >
