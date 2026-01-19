@@ -5,7 +5,11 @@
 
   vars:
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
-    # Definimos el bloque de configuración. Nota: Usamos `r`n para saltos de línea en PowerShell
+    
+    # ---------------------------------------------------------
+    # AQUÍ ESTÁ LA CONFIGURACIÓN A INYECTAR
+    # Usamos %JBOSS_INSTANCE_NAME% como marcador temporal
+    # ---------------------------------------------------------
     otel_config_block: |
       rem ========================================
       rem OpenTelemetry Java Agent - PRODUCCIÓN
@@ -29,7 +33,7 @@
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.javaagent.debug=false"
 
   tasks:
-  # 1. Buscamos las carpetas (Igual que antes)
+  # 1. Buscamos las carpetas
   - name: Identificar instancias JBoss (Patrón T24*)
     ansible.windows.win_find:
       paths: "{{ jboss_base_path }}"
@@ -37,53 +41,47 @@
       patterns: "T24*"
     register: jboss_dirs
 
-  # 2. Modificamos el .bat con PowerShell
+  # 2. Modificamos el .bat con PowerShell (Lógica corregida anti-duplicados)
   - name: Inyectar configuración OTEL en el .bat de inicio
     ansible.windows.win_shell: |
       $batPath = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
       $instanceName = "{{ item.filename }}"
       
-      # 1. Verificamos si el archivo existe
+      # Verificamos existencia
       if (-not (Test-Path $batPath)) {
           Write-Error "El archivo $batPath no existe."
           exit 1
       }
 
-      # 2. Leemos el contenido
       $content = Get-Content -Path $batPath -Raw
       
-      # 3. Verificamos si ya tiene la configuración (Idempotencia)
+      # IDEMPOTENCIA: Si ya tiene la config, no hacemos nada
       if ($content -match "OpenTelemetry Java Agent") {
           Write-Host "La configuración ya existe en $instanceName. Omitiendo."
           exit 0
       }
 
-      # 4. Preparamos el bloque a inyectar (Reemplazamos el placeholder del nombre)
+      # Preparamos el bloque: Reemplazamos el marcador %JBOSS...% por el nombre real de la carpeta
       $configBlock = @"
       {{ otel_config_block }}
       "@
       $configBlock = $configBlock -replace "%JBOSS_INSTANCE_NAME%", $instanceName
 
-      # 5. Definimos la línea objetivo donde insertar ANTES
-      # Buscamos la línea que empieza con CALL %JBOSS_HOME...
-      $targetLine = "CALL %JBOSS_HOME%\bin\standalone.bat"
-      
-      # Escapamos caracteres especiales para Regex
-      $targetRegex = [regex]::Escape($targetLine)
+      # DEFINICIÓN DE LA LÍNEA OBJETIVO
+      # (?m) = Multilinea, ^ = Inicio de línea. \s* = Espacios opcionales.
+      # Esto evita coincidir con "REM CALL..."
+      $targetLineText = "CALL %JBOSS_HOME%\bin\standalone.bat"
+      $targetRegex = "(?m)^\s*" + [regex]::Escape($targetLineText)
 
-      # 6. Realizamos el reemplazo
       if ($content -match $targetRegex) {
-          # Insertamos el bloque + salto de línea + la línea original
-          $newContent = $content -replace $targetRegex, "$configBlock`r`n$targetLine"
+          # Reemplazamos la línea encontrada ($matches[0]) por: Bloque + Salto + Línea original
+          $newContent = $content -replace $targetRegex, "$configBlock`r`n`$0"
           
-          # Guardamos backup
           Copy-Item $batPath "$batPath.bak" -Force
-          
-          # Guardamos archivo modificado
           Set-Content -Path $batPath -Value $newContent
           Write-Host "Configuración inyectada correctamente en $instanceName"
       } else {
-          Write-Warning "No se encontró la línea de arranque 'CALL %JBOSS_HOME%...' en $batPath"
+          Write-Warning "No se encontró una línea activa 'CALL %JBOSS_HOME%...' en $batPath"
       }
     loop: "{{ jboss_dirs.files }}"
     when: jboss_dirs.matched > 0
