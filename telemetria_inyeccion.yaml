@@ -15,7 +15,156 @@
       rem OpenTelemetry Java Agent - PRODUCCIÓN
       rem JBoss: %JBOSS_INSTANCE_NAME%
       rem ========================================
+      set "JAVA_OPTS=%JAVA_OPTS% -javaagent:C:\telemetry\openteleme---
+- name: Flujo de Mantenimiento JBoss (Stop -> Patch -> Start)
+  hosts: all
+  gather_facts: no
+
+  vars:
+    jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
+    
+    # ---------------------------------------------------------
+    # CONFIGURACIÓN OPENTELEMETRY A INYECTAR
+    # Usamos %JBOSS_INSTANCE_NAME% como variable que se reemplazará dinámicamente
+    # ---------------------------------------------------------
+    otel_config_block: |
+      rem ========================================
+      rem OpenTelemetry Java Agent - PRODUCCIÓN
+      rem JBoss: %JBOSS_INSTANCE_NAME%
+      rem ========================================
       set "JAVA_OPTS=%JAVA_OPTS% -javaagent:C:\telemetry\opentelemetry-javaagent.jar"
+      rem Información del servicio
+      set "JAVA_OPTS=%JAVA_OPTS% -Dotel.service.name=JBOSS-APPL"
+      set "JAVA_OPTS=%JAVA_OPTS% -Dotel.resource.attributes=service.name=JBOSS-APPL,service.version=7.2,deployment.environment=production,client=APPL,host.name=%COMPUTERNAME%,jboss.instance=%JBOSS_INSTANCE_NAME%"
+      rem Endpoint local de Alloy (Escucha en todas las interfaces, enviamos a localhost)
+      set "JAVA_OPTS=%JAVA_OPTS% -Dotel.exporter.otlp.endpoint=http://127.0.0.1:4318"
+      set "JAVA_OPTS=%JAVA_OPTS% -Dotel.exporter.otlp.protocol=http/protobuf"
+      rem Exportadores
+      set "JAVA_OPTS=%JAVA_OPTS% -Dotel.traces.exporter=otlp"
+      set "JAVA_OPTS=%JAVA_OPTS% -Dotel.metrics.exporter=otlp"
+      set "JAVA_OPTS=%JAVA_OPTS% -Dotel.logs.exporter=otlp"
+      rem Logs silenciosos
+      set "JAVA_OPTS=%JAVA_OPTS% -Dotel.javaagent.debug=false"
+
+  tasks:
+  # ----------------------------------------------------------------------
+  # 1. IDENTIFICACIÓN DE INSTANCIAS
+  # ----------------------------------------------------------------------
+  - name: Identificar instancias JBoss (Carpetas T24*)
+    ansible.windows.win_find:
+      paths: "{{ jboss_base_path }}"
+      file_type: directory
+      patterns: "T24*"
+    register: jboss_dirs
+
+  # ----------------------------------------------------------------------
+  # 2. APAGADO GRACEFUL INTELIGENTE (Detecta si está encendido o no)
+  # ----------------------------------------------------------------------
+  - name: Detener instancias JBoss (Si el puerto responde)
+    ansible.windows.win_shell: |
+      $instancePath = "{{ item.path }}"
+      $instanceName = "{{ item.filename }}"
+      $batFile = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
+      $cliScript = "$instancePath\bin\jboss-cli.bat"
+
+      Write-Host "Verificando estado de $instanceName..."
+
+      # A) Leer offset del .bat para calcular puerto real
+      if (Test-Path $batFile) {
+          $content = Get-Content $batFile -Raw
+          if ($content -match "port-offset=(\d+)") {
+              $offset = [int]$matches[1]
+              $mgmtPort = 9990 + $offset
+          } else {
+              $mgmtPort = 9990
+          }
+      } else {
+          Write-Warning "No se encontró el BAT de arranque. Omitiendo shutdown."
+          exit 0
+      }
+
+      # B) CHECK DE PUERTO (Clave para tu prueba y producción)
+      # Verifica si algo escucha en el puerto de administración
+      $connection = Test-NetConnection -ComputerName localhost -Port $mgmtPort -InformationLevel Quiet
+      
+      if ($connection) {
+          Write-Host "   -> ESTATUS: ACTIVO (Puerto $mgmtPort). Iniciando apagado graceful..."
+          
+          # Comando de apagado via CLI
+          $shutdownCmd = "& '$cliScript' --connect --controller=localhost:$mgmtPort command=:shutdown"
+          try {
+              Invoke-Expression $shutdownCmd
+              # Esperamos 10s para que libere archivos
+              Start-Sleep -Seconds 10
+          } catch {
+              Write-Warning "Error al enviar comando de apagado."
+          }
+      } else {
+          Write-Host "   -> ESTATUS: DETENIDO (Puerto $mgmtPort cerrado). Continuando..."
+      }
+    loop: "{{ jboss_dirs.files }}"
+    when: jboss_dirs.matched > 0
+
+  # ----------------------------------------------------------------------
+  # 3. INYECCIÓN DE CONFIGURACIÓN (Lógica Anti-Duplicados)
+  # ----------------------------------------------------------------------
+  - name: Inyectar configuración OTEL en el .bat
+    ansible.windows.win_shell: |
+      $batPath = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
+      $instanceName = "{{ item.filename }}"
+      
+      if (-not (Test-Path $batPath)) {
+          Write-Error "El archivo $batPath no existe."
+          exit 1
+      }
+
+      $content = Get-Content -Path $batPath -Raw
+      
+      # 1. IDEMPOTENCIA RÁPIDA
+      if ($content -match "OpenTelemetry Java Agent") {
+          Write-Host "Configuración ya existente en $instanceName. Omitiendo parcheo."
+          exit 0
+      }
+
+      # 2. Preparar bloque de texto
+      $configBlock = @"
+      {{ otel_config_block }}
+      "@
+      $configBlock = $configBlock -replace "%JBOSS_INSTANCE_NAME%", $instanceName
+
+      # 3. INSERCIÓN PRECISA
+      # Busca la línea de arranque 'CALL...' ignorando las comentadas (REM)
+      $targetLineText = "CALL %JBOSS_HOME%\bin\standalone.bat"
+      $regexPattern = "(?m)^[\t ]*" + [regex]::Escape($targetLineText)
+      $regex = [regex]$regexPattern
+
+      if ($regex.IsMatch($content)) {
+          # Reemplaza SOLO la primera coincidencia (evita duplicados si hay múltiples CALLs)
+          $newContent = $regex.Replace($content, "$configBlock`r`n`$0", 1)
+          
+          # Backup y guardado
+          Copy-Item $batPath "$batPath.bak" -Force
+          Set-Content -Path $batPath -Value $newContent
+          Write-Host "PATCH APLICADO CORRECTAMENTE en $instanceName"
+      } else {
+          Write-Warning "No se encontró la línea de arranque activa en $batPath"
+      }
+    loop: "{{ jboss_dirs.files }}"
+    when: jboss_dirs.matched > 0
+
+  # ----------------------------------------------------------------------
+  # 4. ARRANQUE DE INSTANCIAS
+  # ----------------------------------------------------------------------
+  - name: Iniciar instancias JBoss
+    ansible.windows.win_shell: |
+      $batFile = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
+      
+      Write-Host "Iniciando $batFile..."
+      
+      # Start-Process lanza el proceso independiente para que Ansible no se quede esperando
+      Start-Process -FilePath "cmd.exe" -ArgumentList "/c $batFile" -WorkingDirectory "{{ jboss_base_path }}" -WindowStyle Normal
+    loop: "{{ jboss_dirs.files }}"
+    when: jboss_dirs.matched > 0try-javaagent.jar"
       rem Información del servicio
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.service.name=JBOSS-APPL"
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.resource.attributes=service.name=JBOSS-APPL,service.version=7.2,deployment.environment=production,client=APPL,host.name=%COMPUTERNAME%,jboss.instance=%JBOSS_INSTANCE_NAME%"
