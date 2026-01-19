@@ -1,7 +1,34 @@
 ---
-- name: Ping Windows Hosts
-  hosts: all # Or a specific group from your inventory
-  gather_facts: false    # Not required for a simple ping
+- name: Iniciar Servicios JBoss (Estilo Clásico)
+  hosts: all
+  gather_facts: no
+
+  vars:
+    # Ruta base donde están los .bat y las carpetas de instancias
+    jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
+
   tasks:
-    - name: Test connectivity to Windows hosts
-      ansible.windows.win_ping:
+  # ----------------------------------------------------------------------
+  # 1. IDENTIFICAR INSTANCIAS (Buscar carpetas T24*)
+  # ----------------------------------------------------------------------
+  - name: Buscar carpetas de instancias JBoss
+    ansible.windows.win_find:
+      paths: "{{ jboss_base_path }}"
+      file_type: directory
+      patterns: "T24*"
+    register: jboss_dirs
+
+  # ----------------------------------------------------------------------
+  # 2. ARRANQUE CON WIN_COMMAND (Tu método solicitado)
+  # ----------------------------------------------------------------------
+  - name: Iniciar JBoss con script en segundo plano
+    ansible.windows.win_command: >
+      cmd /c start "" "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
+    args:
+      # Establecemos el directorio de trabajo donde está el .bat
+      chdir: "{{ jboss_base_path }}"
+    # async: 10 y poll: 0 lanzan el proceso y desconectan Ansible inmediatamente (Fire & Forget)
+    async: 10
+    poll: 0
+    loop: "{{ jboss_dirs.files }}"
+    when: jboss_dirs.matched > 0
