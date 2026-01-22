@@ -7,7 +7,7 @@
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
     
     # ---------------------------------------------------------
-    # CONFIGURACIÓN OPENTELEMETRY A INYECTAR
+    # CONFIGURACIÓN OPENTELEMETRY + FIX CIERRE CMD
     # ---------------------------------------------------------
     otel_config_block: |
       rem ========================================
@@ -18,7 +18,7 @@
       rem Información del servicio
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.service.name=JBOSS-APPL"
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.resource.attributes=service.name=JBOSS-APPL,service.version=7.2,deployment.environment=production,client=APPL,host.name=%COMPUTERNAME%,jboss.instance=%JBOSS_INSTANCE_NAME%"
-      rem Endpoint local de Alloy (Escucha en todas las interfaces, enviamos a localhost)
+      rem Endpoint local de Alloy
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.exporter.otlp.endpoint=http://127.0.0.1:4318"
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.exporter.otlp.protocol=http/protobuf"
       rem Exportadores
@@ -27,6 +27,11 @@
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.logs.exporter=otlp"
       rem Logs silenciosos
       set "JAVA_OPTS=%JAVA_OPTS% -Dotel.javaagent.debug=false"
+      
+      rem ========================================
+      rem FIX: Cierre automatico de ventana
+      rem ========================================
+      set NOPAUSE=true
 
   tasks:
   # ----------------------------------------------------------------------
@@ -40,7 +45,7 @@
     register: jboss_dirs
 
   # ----------------------------------------------------------------------
-  # 2. APAGADO GRACEFUL INTELIGENTE (Detecta si está encendido o no)
+  # 2. APAGADO GRACEFUL INTELIGENTE
   # ----------------------------------------------------------------------
   - name: Detener instancias JBoss (Si el puerto responde)
     ansible.windows.win_shell: |
@@ -51,7 +56,6 @@
 
       Write-Host "Verificando estado de $instanceName..."
 
-      # A) Leer offset del .bat para calcular puerto real
       if (Test-Path $batFile) {
           $content = Get-Content $batFile -Raw
           if ($content -match "port-offset=(\d+)") {
@@ -65,7 +69,6 @@
           exit 0
       }
 
-      # B) CHECK DE PUERTO
       $connection = Test-NetConnection -ComputerName localhost -Port $mgmtPort -InformationLevel Quiet
       
       if ($connection) {
@@ -84,12 +87,11 @@
     when: jboss_dirs.matched > 0
 
   # ----------------------------------------------------------------------
-  # 3. LIMPIEZA DE VENTANAS "CONGELADAS" (Mata el CMD que pide Enter)
+  # 3. LIMPIEZA DE VENTANAS "CONGELADAS"
   # ----------------------------------------------------------------------
   - name: Matar ventanas CMD antiguas esperando Enter
     ansible.windows.win_shell: |
       $instanceName = "{{ item.filename }}"
-      # Patrón basado en el TITLE de tus scripts .bat (R20_T24Prod...)
       $targetTitle = "*R20_$instanceName*"
       
       Write-Host "Buscando ventanas congeladas con título: $targetTitle"
@@ -107,9 +109,9 @@
     when: jboss_dirs.matched > 0
 
   # ----------------------------------------------------------------------
-  # 4. INYECCIÓN DE CONFIGURACIÓN (Lógica Anti-Duplicados)
+  # 4. INYECCIÓN DE CONFIGURACIÓN + FIX EXIT
   # ----------------------------------------------------------------------
-  - name: Inyectar configuración OTEL en el .bat
+  - name: Inyectar configuración OTEL y FIX EXIT en el .bat
     ansible.windows.win_shell: |
       $batPath = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
       $instanceName = "{{ item.filename }}"
@@ -121,25 +123,28 @@
 
       $content = Get-Content -Path $batPath -Raw
       
-      # 1. IDEMPOTENCIA RÁPIDA
+      # Validamos si ya tiene el parche (ojo: si ya corriste la versión anterior, 
+      # tendrás que restaurar el backup para que aplique este cambio nuevo)
       if ($content -match "OpenTelemetry Java Agent") {
           Write-Host "Configuración ya existente en $instanceName. Omitiendo parcheo."
           exit 0
       }
 
-      # 2. Preparar bloque de texto
+      # 2. Preparar bloque de texto (Incluye el NOPAUSE=true)
       $configBlock = @"
       {{ otel_config_block }}
       "@
       $configBlock = $configBlock -replace "%JBOSS_INSTANCE_NAME%", $instanceName
 
-      # 3. INSERCIÓN PRECISA
+      # 3. INSERCIÓN PRECISA (SANDWICH: Bloque + CALL + Exit)
       $targetLineText = "CALL %JBOSS_HOME%\bin\standalone.bat"
       $regexPattern = "(?m)^[\t ]*" + [regex]::Escape($targetLineText)
       $regex = [regex]$regexPattern
 
       if ($regex.IsMatch($content)) {
-          $newContent = $regex.Replace($content, "$configBlock`r`n`$0", 1)
+          # AQUI ESTA EL CAMBIO IMPORTANTE:
+          # $configBlock (Arriba) + $0 (El Call original) + exit (Abajo)
+          $newContent = $regex.Replace($content, "$configBlock`r`n`$0`r`nexit", 1)
           
           Copy-Item $batPath "$batPath.bak" -Force
           Set-Content -Path $batPath -Value $newContent
@@ -151,11 +156,11 @@
     when: jboss_dirs.matched > 0
 
   # ----------------------------------------------------------------------
-  # 5. ARRANQUE NUEVO (Con NOPAUSE y cmd /c start)
+  # 5. ARRANQUE NUEVO
   # ----------------------------------------------------------------------
   - name: Iniciar JBoss (Modo NOPAUSE)
     ansible.windows.win_command: >
-      cmd /c "set NOPAUSE=true && start {{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
+      cmd /c "start {{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
     args:
       chdir: "{{ jboss_base_path }}"
     async: 10
