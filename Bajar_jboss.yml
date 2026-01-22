@@ -1,34 +1,89 @@
 ---
-- name: Detener JBoss y limpiar logs
+- name: Detener JBoss (Dinámico) y limpiar logs
   hosts: all
   gather_facts: no
-  tasks:
-    - name: Detener JBoss usando jboss-cli
-      win_shell: >
-        C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\bin\jboss-cli.bat --connect command=:shutdown
-      register: shutdown_result
 
-    - name: Esperar 120 segundos para asegurar que JBoss se detuvo
+  vars:
+    # Ruta base donde viven tus instancias
+    jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
+
+  tasks:
+    # ---------------------------------------------------------
+    # 1. DESCUBRIMIENTO DE INSTANCIAS
+    # ---------------------------------------------------------
+    - name: Identificar todas las instancias JBoss (Carpetas T24*)
+      ansible.windows.win_find:
+        paths: "{{ jboss_base_path }}"
+        file_type: directory
+        patterns: "T24*"
+      register: jboss_dirs
+
+    # ---------------------------------------------------------
+    # 2. APAGADO DINÁMICO (Detectando puerto correcto)
+    # ---------------------------------------------------------
+    - name: Detener cada instancia JBoss detectada
+      ansible.windows.win_shell: |
+        $instancePath = "{{ item.path }}"
+        $batFile = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
+        $cliScript = "$instancePath\bin\jboss-cli.bat"
+
+        # 1. Calcular puerto (Offset + 9990)
+        if (Test-Path $batFile) {
+            $content = Get-Content $batFile -Raw
+            if ($content -match "port-offset=(\d+)") {
+                $mgmtPort = 9990 + [int]$matches[1]
+            } else {
+                $mgmtPort = 9990
+            }
+        } else {
+            # Si no hay bat de arranque, asumimos default o saltamos
+            Write-Warning "No se halló .bat para {{ item.filename }}, intentando puerto 9990"
+            $mgmtPort = 9990
+        }
+
+        # 2. Ejecutar Shutdown al puerto específico
+        Write-Host "Apagando {{ item.filename }} en puerto $mgmtPort..."
+        & "$cliScript" --connect --controller=localhost:$mgmtPort command=:shutdown
+      loop: "{{ jboss_dirs.files }}"
+      ignore_errors: yes  # Ignora si alguno ya estaba apagado para no detener el playbook
+
+    # ---------------------------------------------------------
+    # 3. ESPERA GLOBAL
+    # ---------------------------------------------------------
+    - name: Esperar 120 segundos para asegurar que todos los JBoss bajaron
       pause:
         seconds: 120
 
-    - name: Borrar carpetas tmp y data de JBoss
-      win_file:
-        path: "{{ item }}"
+    # ---------------------------------------------------------
+    # 4. LIMPIEZA DE CARPETAS (tmp, data, log)
+    # ---------------------------------------------------------
+    - name: Borrar carpetas tmp, data y log de cada instancia
+      ansible.windows.win_file:
+        path: "{{ item.0.path }}\\standalone\\{{ item.1 }}"
         state: absent
-      loop:
-        - C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\tmp
-        - C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\data
-        - C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\log
+      # Hacemos un bucle anidado: Por cada Instancia (item.0) -> Borra las 3 carpetas (item.1)
+      loop: "{{ jboss_dirs.files | product(['tmp', 'data', 'log']) | list }}"
+      
+    # ---------------------------------------------------------
+    # 5. ELIMINAR ARCHIVOS DE ESTADO (.deployed, .failed, etc)
+    # ---------------------------------------------------------
+    - name: Limpiar marcadores de despliegue en cada instancia
+      ansible.windows.win_shell: |
+        $deployDir = "{{ item.path }}\standalone\deployments"
+        
+        if (Test-Path $deployDir) {
+            Write-Host "Limpiando marcadores en: $deployDir"
+            Remove-Item -Path "$deployDir\*.deployed" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$deployDir\*.undeployed" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$deployDir\*.failed" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$deployDir\*.isdeploying" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$deployDir\*.dodeploy" -Force -ErrorAction SilentlyContinue
+        }
+      loop: "{{ jboss_dirs.files }}"
 
-    - name: Eliminar archivos de estado de despliegue en JBoss
-      win_shell: |
-        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.deployed' -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.undeployed' -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.failed' -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path 'C:\Temenos\R18\3rdParty\As\jboss-eap-7.2\standalone\deployments\*.isdeploying' -Force -ErrorAction SilentlyContinue
-
-    #- name: Volver a crear carpeta de logs
-      #win_file:
-        #path: C:\jboss-eap-7.4.0\jboss-eap-7.4\standalone\log
-        #state: directory
+    # Opcional: Si necesitas recrear la carpeta log vacía para evitar errores al inicio
+    - name: Recrear carpeta logs vacía
+      ansible.windows.win_file:
+        path: "{{ item.path }}\\standalone\\log"
+        state: directory
+      loop: "{{ jboss_dirs.files }}"
