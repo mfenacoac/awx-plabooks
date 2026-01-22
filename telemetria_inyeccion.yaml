@@ -109,7 +109,7 @@
     when: jboss_dirs.matched > 0
 
   # ----------------------------------------------------------------------
-  # 4. INYECCIÓN DE CONFIGURACIÓN + FIX EXIT
+  # 4. INYECCIÓN DE CONFIGURACIÓN + FIX EXIT (CORREGIDO)
   # ----------------------------------------------------------------------
   - name: Inyectar configuración OTEL y FIX EXIT en el .bat
     ansible.windows.win_shell: |
@@ -121,34 +121,49 @@
           exit 1
       }
 
+      # --- IMPORTANTE: RESTAURAR SI YA ESTÁ ROTO ---
+      # Como la ejecución anterior rompió el archivo, primero intentamos 
+      # restaurar el .bak si existe para aplicar el parche limpio.
+      if (Test-Path "$batPath.bak") {
+          $bakContent = Get-Content "$batPath.bak" -Raw
+          # Si el actual ya tiene el error, restauramos
+          $currentContent = Get-Content $batPath -Raw
+          if ($currentContent -match "exit --server-config") {
+             Write-Host "Detectado archivo roto por ejecución anterior. Restaurando backup..."
+             Copy-Item "$batPath.bak" $batPath -Force
+          }
+      }
+      # ---------------------------------------------
+
       $content = Get-Content -Path $batPath -Raw
       
-      # Validamos si ya tiene el parche (ojo: si ya corriste la versión anterior, 
-      # tendrás que restaurar el backup para que aplique este cambio nuevo)
+      # Validamos si ya tiene el parche BIEN puesto
       if ($content -match "OpenTelemetry Java Agent") {
-          Write-Host "Configuración ya existente en $instanceName. Omitiendo parcheo."
+          Write-Host "Configuración ya existente en $instanceName. Omitiendo."
           exit 0
       }
 
-      # 2. Preparar bloque de texto (Incluye el NOPAUSE=true)
+      # Preparar bloque de texto
       $configBlock = @"
       {{ otel_config_block }}
       "@
       $configBlock = $configBlock -replace "%JBOSS_INSTANCE_NAME%", $instanceName
 
-      # 3. INSERCIÓN PRECISA (SANDWICH: Bloque + CALL + Exit)
+      # --- CORRECCIÓN AQUÍ ---
       $targetLineText = "CALL %JBOSS_HOME%\bin\standalone.bat"
-      $regexPattern = "(?m)^[\t ]*" + [regex]::Escape($targetLineText)
+      
+      # Agregamos ".*" al final del patrón para que agarre TODA la línea (incluyendo argumentos)
+      $regexPattern = "(?m)^[\t ]*" + [regex]::Escape($targetLineText) + ".*" 
       $regex = [regex]$regexPattern
 
       if ($regex.IsMatch($content)) {
-          # AQUI ESTA EL CAMBIO IMPORTANTE:
-          # $configBlock (Arriba) + $0 (El Call original) + exit (Abajo)
+          # Ahora $0 contiene la línea entera (CALL ... argumentos)
+          # El reemplazo será: Bloque -> Enter -> Línea Original Completa -> Enter -> Exit
           $newContent = $regex.Replace($content, "$configBlock`r`n`$0`r`nexit", 1)
           
           Copy-Item $batPath "$batPath.bak" -Force
           Set-Content -Path $batPath -Value $newContent
-          Write-Host "PATCH APLICADO CORRECTAMENTE en $instanceName"
+          Write-Host "PATCH APLICADO CORRECTAMENTE (Y ARREGLADO) en $instanceName"
       } else {
           Write-Warning "No se encontró la línea de arranque activa en $batPath"
       }
