@@ -108,10 +108,10 @@
     loop: "{{ jboss_dirs.files }}"
     when: jboss_dirs.matched > 0
 
+# ----------------------------------------------------------------------
+  # 4. INYECCIÓN DE CONFIGURACIÓN + FIX EXIT (PERFECCIONADO)
   # ----------------------------------------------------------------------
-  # 4. INYECCIÓN DE CONFIGURACIÓN + FIX EXIT (CORREGIDO)
-  # ----------------------------------------------------------------------
-  - name: Inyectar configuración OTEL y FIX EXIT en el .bat
+  - name: Inyectar configuración OTEL y arreglar EXIT duplicado
     ansible.windows.win_shell: |
       $batPath = "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
       $instanceName = "{{ item.filename }}"
@@ -121,23 +121,19 @@
           exit 1
       }
 
-      # --- IMPORTANTE: RESTAURAR SI YA ESTÁ ROTO ---
-      # Como la ejecución anterior rompió el archivo, primero intentamos 
-      # restaurar el .bak si existe para aplicar el parche limpio.
+      # --- LÓGICA DE RESTAURACIÓN DE EMERGENCIA ---
+      # Si detectamos un archivo roto (exit con argumentos), restauramos backup
       if (Test-Path "$batPath.bak") {
-          $bakContent = Get-Content "$batPath.bak" -Raw
-          # Si el actual ya tiene el error, restauramos
           $currentContent = Get-Content $batPath -Raw
           if ($currentContent -match "exit --server-config") {
-             Write-Host "Detectado archivo roto por ejecución anterior. Restaurando backup..."
+             Write-Host "Detectado archivo roto. Restaurando backup..."
              Copy-Item "$batPath.bak" $batPath -Force
           }
       }
-      # ---------------------------------------------
 
       $content = Get-Content -Path $batPath -Raw
       
-      # Validamos si ya tiene el parche BIEN puesto
+      # Validamos si ya tiene el parche (IDEMPOTENCIA)
       if ($content -match "OpenTelemetry Java Agent") {
           Write-Host "Configuración ya existente en $instanceName. Omitiendo."
           exit 0
@@ -149,21 +145,25 @@
       "@
       $configBlock = $configBlock -replace "%JBOSS_INSTANCE_NAME%", $instanceName
 
-      # --- CORRECCIÓN AQUÍ ---
+      # --- AQUÍ ESTÁ LA MAGIA PARA EVITAR DOBLE EXIT ---
       $targetLineText = "CALL %JBOSS_HOME%\bin\standalone.bat"
       
-      # Agregamos ".*" al final del patrón para que agarre TODA la línea (incluyendo argumentos)
-      $regexPattern = "(?m)^[\t ]*" + [regex]::Escape($targetLineText) + ".*" 
+      # EXPLICACIÓN DEL REGEX:
+      # (?m)        -> Multilínea
+      # (^[\t ]*... -> GRUPO 1 ($1): Captura la línea del CALL completa con sus argumentos (.*)
+      # (\s+exit)?  -> GRUPO 2: Detecta (y consume) opcionalmente un 'exit' existente al final
+      
+      $regexPattern = "(?m)(^[\t ]*" + [regex]::Escape($targetLineText) + ".*)(\s+exit)?"
       $regex = [regex]$regexPattern
 
       if ($regex.IsMatch($content)) {
-          # Ahora $0 contiene la línea entera (CALL ... argumentos)
-          # El reemplazo será: Bloque -> Enter -> Línea Original Completa -> Enter -> Exit
-          $newContent = $regex.Replace($content, "$configBlock`r`n`$0`r`nexit", 1)
+          # Reemplazamos lo encontrado (CALL + posible exit viejo) 
+          # Por: Config + CALL Limpio ($1) + Un solo Exit nuevo
+          $newContent = $regex.Replace($content, "$configBlock`r`n`$1`r`nexit", 1)
           
           Copy-Item $batPath "$batPath.bak" -Force
           Set-Content -Path $batPath -Value $newContent
-          Write-Host "PATCH APLICADO CORRECTAMENTE (Y ARREGLADO) en $instanceName"
+          Write-Host "PATCH APLICADO Y LIMPIADO en $instanceName"
       } else {
           Write-Warning "No se encontró la línea de arranque activa en $batPath"
       }
