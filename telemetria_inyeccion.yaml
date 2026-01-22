@@ -169,3 +169,16 @@
       }
     loop: "{{ jboss_dirs.files }}"
     when: jboss_dirs.matched > 0
+
+# ----------------------------------------------------------------------
+  # 5. ARRANQUE NUEVO
+  # ----------------------------------------------------------------------
+  - name: Iniciar JBoss (Modo NOPAUSE)
+    ansible.windows.win_command: >
+      cmd "start {{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
+    args:
+      chdir: "{{ jboss_base_path }}"
+    async: 10
+    poll: 0
+    loop: "{{ jboss_dirs.files }}"
+    when: jboss_dirs.matched > 0
