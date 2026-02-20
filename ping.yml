@@ -1,34 +1,13 @@
 ---
-- name: Iniciar Servicios JBoss (Estilo Clásico)
+- name: Prueba de conectividad automática desde Grafana
+  # Apuntamos a todos, pero AWX aplicará el filtro de la IP con el "limit"
   hosts: all
-  gather_facts: no
-
-  vars:
-    # Ruta base donde están los .bat y las carpetas de instancias
-    jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
-
+  gather_facts: false
+  
   tasks:
-  # ----------------------------------------------------------------------
-  # 1. IDENTIFICAR INSTANCIAS (Buscar carpetas T24*)
-  # ----------------------------------------------------------------------
-  - name: Buscar carpetas de instancias JBoss
-    ansible.windows.win_find:
-      paths: "{{ jboss_base_path }}"
-      file_type: directory
-      patterns: "T24*"
-    register: jboss_dirs
-
-  # ----------------------------------------------------------------------
-  # 2. ARRANQUE CON WIN_COMMAND (Tu método solicitado)
-  # ----------------------------------------------------------------------
-  - name: Iniciar JBoss con script en segundo plano
-    ansible.windows.win_command: >
-      cmd /c start "" "{{ jboss_base_path }}\JBoss_{{ item.filename }}_R20.bat"
-    args:
-      # Establecemos el directorio de trabajo donde está el .bat
-      chdir: "{{ jboss_base_path }}"
-    # async: 10 y poll: 0 lanzan el proceso y desconectan Ansible inmediatamente (Fire & Forget)
-    async: 10
-    poll: 0
-    loop: "{{ jboss_dirs.files }}"
-    when: jboss_dirs.matched > 0
+    - name: Ejecutar Ping hacia el servidor Windows
+      ansible.windows.win_ping:
+      
+    # Opcional: Si también tienes servidores Linux en el mismo grupo, 
+    # puedes usar un bloque con rescate o delegar según el OS, 
+    # pero si tu inventario es puramente Windows, solo necesitas la tarea de arriba.
