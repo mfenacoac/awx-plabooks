@@ -1,13 +1,9 @@
 ---
 - name: Prueba de conectividad automática desde Grafana
-  # Apuntamos a todos, pero AWX aplicará el filtro de la IP con el "limit"
-  hosts: all
+  # Quitamos el "all" y forzamos a que use la variable que manda Grafana
+  hosts: "{{ target_host }}"
   gather_facts: false
   
   tasks:
     - name: Ejecutar Ping hacia el servidor Windows
       ansible.windows.win_ping:
-      
-    # Opcional: Si también tienes servidores Linux en el mismo grupo, 
-    # puedes usar un bloque con rescate o delegar según el OS, 
-    # pero si tu inventario es puramente Windows, solo necesitas la tarea de arriba.
