@@ -1,16 +1,17 @@
 ---
-- name: Auto-Remediación de Discos (Enrutador Maestro)
-  # Recibe la IP limpia que manda Grafana ("10.138.29.122")
-  hosts: "{{ target_host }}" 
+- name: Automatizacion Dinámica de Almacenamiento
+  hosts: "{{ target_host }}"
   gather_facts: false
   
   tasks:
-    - name: ">> ENRUTANDO A LIMPIEZA DE WINDOWS <<"
-      ansible.builtin.include_tasks: tareas_windows.yml
-      # La magia: Solo importa este archivo si la IP en AWX pertenece a este grupo
-      when: "'windows_servers' in group_names" 
+    - name: ">> RUTA: Servidores Aplicativos T24 <<"
+      ansible.builtin.include_tasks: tareas_t24.yml
+      when: "'Aplicativos_T24' in group_names"
 
-    - name: ">> ENRUTANDO A LIMPIEZA DE LINUX (APPL) <<"
-      ansible.builtin.include_tasks: tareas_appl.yml
-      # Si la IP no está en este grupo, ignora este paso por completo
-      when: "'appl_servers' in group_names"
+    - name: ">> RUTA: Servidores TCIB Micoope <<"
+      ansible.builtin.include_tasks: tareas_tcib.yml
+      when: "'TCIB_APP_Micoope' in group_names"
+
+    - name: ">> RUTA: Servidores VISA <<"
+      ansible.builtin.include_tasks: tareas_visa.yml
+      when: "'VISA' in group_names"
