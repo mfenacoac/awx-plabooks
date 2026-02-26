@@ -1,0 +1,20 @@
+---
+# ======================================================================
+# ARCHIVO DE TAREAS: LIMPIEZA PARA SERVIDORES T24 (WINDOWS)
+# ======================================================================
+
+- name: Limpiar archivos y logs en la carpeta C:\NOC
+  ansible.windows.win_shell: Remove-Item -Path "C:\NOC\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+- name: Limpiar logs de JBoss/Temenos (Rutas dinámicas con comodín)
+  # El asterisco (*) navega dinámicamente sin importar cómo se llame la carpeta del nodo (ej. jboss-eap-7.2)
+  ansible.windows.win_shell: Remove-Item -Path "C:\Temenos\R18\3rdParty\As\*\standalone\log\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+- name: Limpiar carpeta temporal del sistema (Windows Temp)
+  ansible.windows.win_shell: Remove-Item -Path "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+- name: Limpiar carpetas temporales de los perfiles de usuario (%TEMP%)
+  ansible.windows.win_shell: Remove-Item -Path "C:\Users\*\AppData\Local\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+- name: Vaciar la Papelera de Reciclaje
+  ansible.windows.win_shell: Clear-RecycleBin -Force -ErrorAction SilentlyContinue
