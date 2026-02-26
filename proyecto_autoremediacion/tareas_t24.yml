@@ -8,7 +8,7 @@
 
 - name: Limpiar logs de JBoss/Temenos (Rutas dinámicas con comodín)
   # El asterisco (*) navega dinámicamente sin importar cómo se llame la carpeta del nodo (ej. jboss-eap-7.2)
-  ansible.windows.win_shell: Remove-Item -Path "C:\Temenos\R18\3rdParty\As\*\standalone\log\*" -Recurse -Force -ErrorAction SilentlyContinue
+  ansible.windows.win_shell: Get-ChildItem -Path "C:\Temenos\R18\3rdParty\As\*\standalone\log\*" -File | Remove-Item -Force -ErrorAction SilentlyContinue
   ignore_errors: true
 
 - name: Limpiar carpeta temporal del sistema (Windows Temp)
