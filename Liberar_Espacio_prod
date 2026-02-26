@@ -1,0 +1,9 @@
+---
+- name: Prueba de conectividad automática desde Grafana
+  #Desde grafana se envia la variable tarjet_host la cual usara ansible para ejecutar el playbook
+  hosts: "{{ target_host }}"
+  gather_facts: false
+  
+  tasks:
+    - name: Ejecutar Ping hacia el servidor Windows
+      ansible.windows.win_ping:
