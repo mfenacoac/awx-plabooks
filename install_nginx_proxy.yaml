@@ -1,0 +1,106 @@
+---
+- name: Despliegue de Nginx Proxy y NSSM
+  hosts: all
+  gather_facts: no
+
+  vars:
+    # ---------------------------------------------------------
+    # VARIABLES GENERALES Y DESCARGA
+    # ---------------------------------------------------------
+    zip_url: "https://github.com/mfenacoac/awx-plabooks/releases/download/untagged-0c42aa2c8034173ccb92/Instaladores.zip"
+    zip_file: "Instaladores.zip"
+    temp_dir: "C:\\Temp_Instaladores"
+    extracted_base: "C:\\Temp_Instaladores\\Instaladores" # Carpeta raíz al extraer
+    
+    # ---------------------------------------------------------
+    # VARIABLES NGINX Y NSSM
+    # ---------------------------------------------------------
+    nginx_install_dir: "C:\\nginx"
+    nssm_install_dir: "C:\\nssm"
+    nssm_exe: "C:\\nssm\\win64\\nssm.exe"
+
+  tasks:
+
+  # =======================================================================
+  # FASE 1: PREPARACIÓN DE DIRECTORIOS
+  # =======================================================================
+  - name: Crear directorios base de instalación en Windows
+    ansible.windows.win_file:
+      path: "{{ item }}"
+      state: directory
+    loop:
+      - "{{ temp_dir }}"
+      - "{{ nginx_install_dir }}"
+      - "{{ nssm_install_dir }}"
+
+  # =======================================================================
+  # FASE 2: DESCARGA Y EXTRACCIÓN DEL PAQUETE (AWX Bridge)
+  # =======================================================================
+  - name: Descargar Instaladores.zip en el controlador AWX
+    delegate_to: localhost
+    run_once: true
+    get_url:
+      url: "{{ zip_url }}"
+      dest: "/tmp/{{ zip_file }}"
+      mode: '0644'
+
+  - name: Transferir Instaladores.zip a los servidores Windows
+    ansible.windows.win_copy:
+      src: "/tmp/{{ zip_file }}"
+      dest: "{{ temp_dir }}\\{{ zip_file }}"
+
+  - name: Descomprimir paquete maestro
+    ansible.windows.win_shell: >
+      Expand-Archive -Path "{{ temp_dir }}\\{{ zip_file }}" -DestinationPath "{{ temp_dir }}" -Force
+    args:
+      creates: "{{ extracted_base }}"
+
+  # =======================================================================
+  # FASE 3: REESTRUCTURACIÓN (Aplanado de carpetas anidadas)
+  # =======================================================================
+  - name: Mover Nginx desde la subcarpeta a C:\nginx
+    ansible.windows.win_shell: |
+      Copy-Item -Path "{{ extracted_base }}\nginx\nginx-1.28.2\*" -Destination "{{ nginx_install_dir }}" -Recurse -Force
+    args:
+      creates: "{{ nginx_install_dir }}\\nginx.exe"
+
+  - name: Mover NSSM desde la subcarpeta a C:\nssm
+    ansible.windows.win_shell: |
+      Copy-Item -Path "{{ extracted_base }}\nssm\nssm-2.24\*" -Destination "{{ nssm_install_dir }}" -Recurse -Force
+    args:
+      creates: "{{ nssm_exe }}"
+
+  # =======================================================================
+  # FASE 4: CONFIGURACIÓN Y CREACIÓN DEL SERVICIO
+  # =======================================================================
+  - name: Aplicar nginx.conf dinámico
+    ansible.windows.win_template:
+      src: templates/nginx.conf.j2
+      dest: "{{ nginx_install_dir }}\\conf\\nginx.conf"
+      force: yes
+
+  - name: Verificar si el servicio NginxProxy ya existe
+    ansible.windows.win_service_info:
+      name: NginxProxy
+    register: nginx_service_info
+
+  - name: Crear servicio NginxProxy con NSSM
+    ansible.windows.win_shell: |
+      & "{{ nssm_exe }}" install NginxProxy "{{ nginx_install_dir }}\nginx.exe"
+      & "{{ nssm_exe }}" set NginxProxy AppDirectory "{{ nginx_install_dir }}"
+      & "{{ nssm_exe }}" set NginxProxy Description "Proxy Inverso Nginx para Grafana Alloy"
+    when: not nginx_service_info.exists
+
+  - name: Iniciar servicio NginxProxy
+    ansible.windows.win_service:
+      name: NginxProxy
+      state: restarted
+      start_mode: auto
+
+  # =======================================================================
+  # FASE 5: LIMPIEZA
+  # =======================================================================
+  - name: Limpiar instaladores temporales
+    ansible.windows.win_file:
+      path: "{{ temp_dir }}"
+      state: absent
