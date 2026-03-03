@@ -7,7 +7,7 @@
     # ---------------------------------------------------------
     # VARIABLES GENERALES Y DESCARGA
     # ---------------------------------------------------------
-    zip_url: "https://github.com/mfenacoac/awx-plabooks/releases/download/untagged-0c42aa2c8034173ccb92/Instaladores.zip"
+    zip_url: "https://github.com/mfenacoac/awx-plabooks/releases/download/Grafana/Instaladores.zip"
     zip_file: "Instaladores.zip"
     temp_dir: "C:\\Temp_Instaladores"
     extracted_base: "C:\\Temp_Instaladores\\Instaladores" # Carpeta raíz al extraer
