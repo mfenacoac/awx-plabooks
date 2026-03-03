@@ -55,18 +55,30 @@
     args:
       creates: "{{ extracted_base }}"
 
+# =======================================================================
+  # FASE 3: EXTRACCIÓN DE ZIPs INTERNOS Y REESTRUCTURACIÓN
   # =======================================================================
-  # FASE 3: REESTRUCTURACIÓN (Aplanado de carpetas anidadas)
-  # =======================================================================
+  - name: Descomprimir nginx.zip interno
+    ansible.windows.win_shell: >
+      Expand-Archive -Path "{{ extracted_base }}\nginx.zip" -DestinationPath "{{ extracted_base }}\nginx_temp" -Force
+    args:
+      creates: "{{ extracted_base }}\nginx_temp\nginx-1.28.2"
+
+  - name: Descomprimir nssm.zip interno
+    ansible.windows.win_shell: >
+      Expand-Archive -Path "{{ extracted_base }}\nssm.zip" -DestinationPath "{{ extracted_base }}\nssm_temp" -Force
+    args:
+      creates: "{{ extracted_base }}\nssm_temp\nssm-2.24"
+
   - name: Mover Nginx desde la subcarpeta a C:\nginx
     ansible.windows.win_shell: |
-      Copy-Item -Path "{{ extracted_base }}\nginx\nginx-1.28.2\*" -Destination "{{ nginx_install_dir }}" -Recurse -Force
+      Copy-Item -Path "{{ extracted_base }}\nginx_temp\nginx-1.28.2\*" -Destination "{{ nginx_install_dir }}" -Recurse -Force
     args:
       creates: "{{ nginx_install_dir }}\\nginx.exe"
 
   - name: Mover NSSM desde la subcarpeta a C:\nssm
     ansible.windows.win_shell: |
-      Copy-Item -Path "{{ extracted_base }}\nssm\nssm-2.24\*" -Destination "{{ nssm_install_dir }}" -Recurse -Force
+      Copy-Item -Path "{{ extracted_base }}\nssm_temp\nssm-2.24\*" -Destination "{{ nssm_install_dir }}" -Recurse -Force
     args:
       creates: "{{ nssm_exe }}"
 
