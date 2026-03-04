@@ -9,7 +9,7 @@
     alloy_exe: "Alloy_agente.exe"
     alloy_config_file: "config.alloy"
 
-    alloy_download_url: "https://github.com/mfenacoac/awx-plabooks/releases/download/Alloy"
+    alloy_download_url: "https://github.com/mfenacoac/awx-plabooks/releases/download/Grafana/Alloy_Grafana.exe"
 
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
 
