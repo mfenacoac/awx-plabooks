@@ -8,10 +8,9 @@
     alloy_zip: "Alloy_agente.zip"
     alloy_exe: "Alloy_agente.exe"
     alloy_config_file: "config.alloy"
-
     alloy_download_url: "https://github.com/mfenacoac/awx-plabooks/releases/download/Grafana/"
-
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
+    grafana_server_ip: "10.138.7.20"
 
   tasks:
 
