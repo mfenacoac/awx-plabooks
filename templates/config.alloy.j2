@@ -294,3 +294,10 @@ otelcol.exporter.otlp "tempo" {
         }
     }
 }
+
+// ============================================
+// EXPORTAR LOGS OTLP A LOKI (El bloque que faltaba)
+// ============================================
+otelcol.exporter.loki "default" {
+    forward_to = [loki.write.endpoint.receiver]
+}
