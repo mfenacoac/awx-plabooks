@@ -50,7 +50,7 @@ loki.process "{{ jboss.name }}_processor" {
 
     // 1. FILTRO DE RUIDO (Descarta INFO y DEBUG)
     stage.drop {
-        expression = "(?i).*(DEBUG|INFO).*"
+        expression = "(?i).*(DEBUG|INFO|WARN).*"
     }
 
     // 2. EMPAQUETADO MULTILINE (Para Stack Traces de Java)
@@ -110,7 +110,7 @@ loki.process "tafj_{{ log_type }}_processor" {
     
     // 1. FILTRO DE RUIDO
     stage.drop {
-        expression = "(?i).*(DEBUG|INFO).*"
+        expression = "(?i).*(DEBUG|INFO|WARN).*"
     }
 
     // 2. EMPAQUETADO MULTILINE HÍBRIDO
