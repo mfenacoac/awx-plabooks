@@ -26,7 +26,6 @@ loki.source.windowsevent "application" {
 // Mejora: Recolectar log de Sistema pero excluyendo ruido (ej. 7036 = servicio iniciado)
 loki.source.windowsevent "system" {
     eventlog_name     = "System"
-    exclude_event_ids = "7036,10016" 
     forward_to        = [loki.write.endpoint.receiver]
 }
 
