@@ -52,8 +52,8 @@
   - name: Descomprimir paquete maestro
     ansible.windows.win_shell: >
       Expand-Archive -Path "{{ temp_dir }}\\{{ zip_file }}" -DestinationPath "{{ temp_dir }}" -Force
-    args:
-      creates: "{{ extracted_base }}"
+    #args:
+      #creates: "{{ extracted_base }}"
 
 # =======================================================================
   # FASE 3: EXTRACCIÓN DE ZIPs INTERNOS Y REESTRUCTURACIÓN
