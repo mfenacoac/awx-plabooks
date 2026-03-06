@@ -41,7 +41,7 @@
       - "{{ nginx_install_dir }}"
       - "{{ nssm_install_dir }}"
 
-  # =======================================================================
+# =======================================================================
   # FASE 2: DESCARGA Y EXTRACCIÓN DEL PAQUETE MAESTRO
   # =======================================================================
   - name: Descargar Instaladores.zip en el controlador AWX
@@ -59,34 +59,32 @@
 
   - name: Descomprimir paquete maestro
     ansible.windows.win_shell: >
-      Expand-Archive -Path "{{ temp_dir }}\\{{ zip_file }}" -DestinationPath "{{ temp_dir }}" -Force
-    args:
-      creates: "{{ extracted_base }}"
+      Expand-Archive -Path "{{ temp_dir }}\{{ zip_file }}" -DestinationPath "{{ extracted_base }}" -Force
 
   # =======================================================================
   # FASE 3: EXTRACCIÓN DE ZIPs INTERNOS Y REESTRUCTURACIÓN
   # =======================================================================
   - name: Descomprimir nginx.zip interno
     ansible.windows.win_shell: >
-      Expand-Archive -Path "{{ extracted_base }}\\{{ nginx_zip | default('nginx.zip') }}" -DestinationPath "{{ extracted_base }}\\nginx_temp" -Force
+      Expand-Archive -Path "{{ extracted_base }}\nginx.zip" -DestinationPath "{{ extracted_base }}\nginx_temp" -Force
     args:
       creates: "{{ extracted_base }}\\nginx_temp\\nginx-1.28.2"
 
   - name: Descomprimir nssm.zip interno
     ansible.windows.win_shell: >
-      Expand-Archive -Path "{{ extracted_base }}\\{{ nssm_zip | default('nssm.zip') }}" -DestinationPath "{{ extracted_base }}\\nssm_temp" -Force
+      Expand-Archive -Path "{{ extracted_base }}\nssm.zip" -DestinationPath "{{ extracted_base }}\nssm_temp" -Force
     args:
       creates: "{{ extracted_base }}\\nssm_temp\\nssm-2.24"
 
   - name: Mover Nginx desde la subcarpeta a C:\nginx
     ansible.windows.win_shell: |
-      Copy-Item -Path "{{ extracted_base }}\\nginx_temp\\nginx-1.28.2\\*" -Destination "{{ nginx_install_dir }}" -Recurse -Force
+      Copy-Item -Path "{{ extracted_base }}\nginx_temp\nginx-1.28.2\*" -Destination "{{ nginx_install_dir }}" -Recurse -Force
     args:
       creates: "{{ nginx_install_dir }}\\nginx.exe"
 
   - name: Mover NSSM desde la subcarpeta a C:\nssm
     ansible.windows.win_shell: |
-      Copy-Item -Path "{{ extracted_base }}\\nssm_temp\\nssm-2.24\\*" -Destination "{{ nssm_install_dir }}" -Recurse -Force
+      Copy-Item -Path "{{ extracted_base }}\nssm_temp\nssm-2.24\*" -Destination "{{ nssm_install_dir }}" -Recurse -Force
     args:
       creates: "{{ nssm_exe }}"
 
