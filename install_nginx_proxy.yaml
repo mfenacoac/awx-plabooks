@@ -1,20 +1,16 @@
 ---
-- name: Despliegue de Nginx Proxy y NSSM
+- name: Despliegue de Nginx Proxy y NSSM (Versión Blindada)
   hosts: all
   gather_facts: no
 
   vars:
     # ---------------------------------------------------------
-    # VARIABLES GENERALES Y DESCARGA
+    # VARIABLES GENERALES
     # ---------------------------------------------------------
     zip_url: "https://github.com/mfenacoac/awx-plabooks/releases/download/Grafana/Instaladores.zip"
     zip_file: "Instaladores.zip"
     temp_dir: "C:\\Temp_Instaladores"
-    extracted_base: "C:\\Temp_Instaladores\\Instaladores" # Carpeta raíz al extraer
     
-    # ---------------------------------------------------------
-    # VARIABLES NGINX Y NSSM
-    # ---------------------------------------------------------
     nginx_install_dir: "C:\\nginx"
     nssm_install_dir: "C:\\nssm"
     nssm_exe: "C:\\nssm\\win64\\nssm.exe"
@@ -22,17 +18,14 @@
   tasks:
 
   # =======================================================================
-  # FASE 0: LIMPIEZA PREVIA (Garantiza entorno limpio)
+  # FASE 0 Y 1: LIMPIEZA Y PREPARACIÓN
   # =======================================================================
-  - name: Eliminar temporales de pruebas fallidas anteriores
+  - name: Eliminar temporales previos para asegurar un entorno limpio
     ansible.windows.win_file:
       path: "{{ temp_dir }}"
       state: absent
 
-  # =======================================================================
-  # FASE 1: PREPARACIÓN DE DIRECTORIOS
-  # =======================================================================
-  - name: Crear directorios base de instalación en Windows
+  - name: Crear directorios base de instalación
     ansible.windows.win_file:
       path: "{{ item }}"
       state: directory
@@ -41,10 +34,10 @@
       - "{{ nginx_install_dir }}"
       - "{{ nssm_install_dir }}"
 
-# =======================================================================
-  # FASE 2: DESCARGA Y EXTRACCIÓN DEL PAQUETE MAESTRO
   # =======================================================================
-  - name: Descargar Instaladores.zip en el controlador AWX
+  # FASE 2: DESCARGA DEL PAQUETE MAESTRO
+  # =======================================================================
+  - name: Descargar Instaladores.zip en AWX
     delegate_to: localhost
     run_once: true
     get_url:
@@ -57,36 +50,35 @@
       src: "/tmp/{{ zip_file }}"
       dest: "{{ temp_dir }}\\{{ zip_file }}"
 
-  - name: Descomprimir paquete maestro
-    ansible.windows.win_shell: >
-      Expand-Archive -Path "{{ temp_dir }}\{{ zip_file }}" -DestinationPath "{{ extracted_base }}" -Force
-
   # =======================================================================
-  # FASE 3: EXTRACCIÓN DE ZIPs INTERNOS Y REESTRUCTURACIÓN
+  # FASE 3: EXTRACCIÓN INTELIGENTE Y REESTRUCTURACIÓN
   # =======================================================================
-  - name: Descomprimir nginx.zip interno
-    ansible.windows.win_shell: >
-      Expand-Archive -Path "{{ extracted_base }}\nginx.zip" -DestinationPath "{{ extracted_base }}\nginx_temp" -Force
-    args:
-      creates: "{{ extracted_base }}\\nginx_temp\\nginx-1.28.2"
-
-  - name: Descomprimir nssm.zip interno
-    ansible.windows.win_shell: >
-      Expand-Archive -Path "{{ extracted_base }}\nssm.zip" -DestinationPath "{{ extracted_base }}\nssm_temp" -Force
-    args:
-      creates: "{{ extracted_base }}\\nssm_temp\\nssm-2.24"
-
-  - name: Mover Nginx desde la subcarpeta a C:\nginx
+  - name: Descomprimir paquete maestro y extraer Nginx/NSSM automáticamente
     ansible.windows.win_shell: |
-      Copy-Item -Path "{{ extracted_base }}\nginx_temp\nginx-1.28.2\*" -Destination "{{ nginx_install_dir }}" -Recurse -Force
-    args:
-      creates: "{{ nginx_install_dir }}\\nginx.exe"
+      $TempDir = "C:\Temp_Instaladores"
+      $Extracted = "$TempDir\Extracted"
+      
+      # 1. Extraer paquete maestro
+      Expand-Archive -Path "$TempDir\Instaladores.zip" -DestinationPath $Extracted -Force
+      
+      # 2. Buscar nginx.zip recursivamente y extraerlo
+      $NginxZip = Get-ChildItem -Path $Extracted -Filter "nginx.zip" -Recurse | Select-Object -First 1
+      if ($NginxZip) {
+          Expand-Archive -Path $NginxZip.FullName -DestinationPath "$Extracted\nginx_temp" -Force
+          # Usamos comodín (*) para no depender de la versión (1.28.2)
+          Copy-Item -Path "$Extracted\nginx_temp\nginx-*\*" -Destination "C:\nginx" -Recurse -Force
+      } else {
+          Throw "No se encontró nginx.zip dentro de Instaladores.zip"
+      }
 
-  - name: Mover NSSM desde la subcarpeta a C:\nssm
-    ansible.windows.win_shell: |
-      Copy-Item -Path "{{ extracted_base }}\nssm_temp\nssm-2.24\*" -Destination "{{ nssm_install_dir }}" -Recurse -Force
-    args:
-      creates: "{{ nssm_exe }}"
+      # 3. Buscar nssm.zip recursivamente y extraerlo
+      $NssmZip = Get-ChildItem -Path $Extracted -Filter "nssm.zip" -Recurse | Select-Object -First 1
+      if ($NssmZip) {
+          Expand-Archive -Path $NssmZip.FullName -DestinationPath "$Extracted\nssm_temp" -Force
+          Copy-Item -Path "$Extracted\nssm_temp\nssm-*\*" -Destination "C:\nssm" -Recurse -Force
+      } else {
+          Throw "No se encontró nssm.zip dentro de Instaladores.zip"
+      }
 
   # =======================================================================
   # FASE 4: CONFIGURACIÓN Y CREACIÓN DEL SERVICIO
@@ -104,7 +96,7 @@
 
   - name: Crear servicio NginxProxy con NSSM
     ansible.windows.win_shell: |
-      & "{{ nssm_exe }}" install NginxProxy "{{ nginx_install_dir }}\\nginx.exe"
+      & "{{ nssm_exe }}" install NginxProxy "{{ nginx_install_dir }}\nginx.exe"
       & "{{ nssm_exe }}" set NginxProxy AppDirectory "{{ nginx_install_dir }}"
       & "{{ nssm_exe }}" set NginxProxy Description "Proxy Inverso Nginx para Grafana Alloy"
     when: not nginx_service_info.exists
