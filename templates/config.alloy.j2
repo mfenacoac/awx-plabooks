@@ -5,7 +5,6 @@ logging {
 // ============================================
 // MÉTRICAS DE WINDOWS
 // ============================================
-
 prometheus.exporter.windows "default" {
   enabled_collectors = [
     "cpu", "logical_disk", "net", "os", "system", "cpu_info", "memory", "time",
@@ -21,14 +20,14 @@ prometheus.scrape "windows_exporter" {
 prometheus.relabel "windows_tags" {
     forward_to = [prometheus.remote_write.default.receiver]
     rule { target_label = "host_ip"; replacement = "{{ ansible_host }}" }
+    rule { target_label = "instance"; replacement = "{{ ansible_host }}" }
     rule { target_label = "job"; replacement = "APPL_TCIB" }
     rule { target_label = "environment"; replacement = "PROD" }
 }
 
 // ============================================
-// LOGS DEL SISTEMA WINDOWS (Optimizados)
+// LOGS DEL SISTEMA WINDOWS
 // ============================================
-
 loki.source.windowsevent "application" {
     eventlog_name = "Application"
     bookmark_path = "C:\\ProgramData\\GrafanaLabs\\Alloy\\data\\bookmark_app.xml"
@@ -42,21 +41,21 @@ loki.source.windowsevent "system" {
 }
 
 // ============================================
-// JBOSS - CICLO DINÁMICO
+// JBOSS - CICLO DINÁMICO (Soporta T24 y TCIB)
 // ============================================
 {% for jboss in jboss_instances %}
-local.file_match "{{ jboss.name }}_files" {
+local.file_match "{{ jboss.name | lower }}_files" {
     path_targets = [{"__path__" = "{{ jboss.log_path | replace('\\', '/') }}"}]
-    sync_period = "5s"
+    sync_period = "15s"
 }
 
-loki.source.file "{{ jboss.name }}_scrape" {
-    targets       = local.file_match.{{ jboss.name }}_files.targets
-    forward_to    = [loki.process.{{ jboss.name }}_processor.receiver]
+loki.source.file "{{ jboss.name | lower }}_scrape" {
+    targets       = local.file_match.{{ jboss.name | lower }}_files.targets
+    forward_to    = [loki.process.{{ jboss.name | lower }}_processor.receiver]
     tail_from_end = true
 }
 
-loki.process "{{ jboss.name }}_processor" {
+loki.process "{{ jboss.name | lower }}_processor" {
     stage.drop { expression = "(?i).*(DEBUG|INFO|WARN).*" }
     stage.multiline {
         firstline     = "^(\\[[A-Z]+\\] )?\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}"
@@ -66,10 +65,10 @@ loki.process "{{ jboss.name }}_processor" {
     stage.structured_metadata { values = { trace_id = "", span_id  = "" } }
     stage.static_labels {
         values = {
-            job            = "JBOSS_APPL",
-            filename       = "log_{{ jboss.name }}",
-            service_name   = "JBOSS-APPL",
-            environment    = "production",
+            job            = "{{ jboss.job_name }}",
+            filename       = "LOG_SERVER_{{ jboss.name }}",
+            service_name   = "{{ jboss.service_name }}",
+            environment    = "PROD",
             hostname       = sys.env("COMPUTERNAME"),
             instance       = "{{ ansible_host }}",
             jboss_instance = "{{ jboss.name }}",
@@ -80,22 +79,50 @@ loki.process "{{ jboss.name }}_processor" {
 {% endfor %}
 
 // ============================================
-// LOGS ESTÁTICOS DE TAFJ
+// LOGS DINÁMICOS - DEBUG VFS (Solo para TCIB)
 // ============================================
-{% set tafj_logs = ['database', 'runtime', 'ejb', 'dbimport', 'mdb'] %}
+{% if enable_vfs_debug_logs | default(false) %}
+local.file_match "Debug_files" {
+    path_targets = [{"__path__" = "C:/Temenos/R18/jboss-eap-7.1/standalone/tmp/vfs/temp/*/*/logs/Debug.log"}]
+    sync_period = "15s" 
+}
 
+loki.source.file "Debug_scrape" {
+    targets       = local.file_match.Debug_files.targets
+    forward_to    = [loki.process.debug_processor.receiver] 
+    tail_from_end = false
+}
+
+loki.process "debug_processor" {
+    stage.static_labels {
+        values = {
+            job          = "DEBUG_APPL_TCIB_{{ ansible_host.split('.')[-1] }}",
+            filename     = "LOG_DEBUG",
+            service_name = "TCIB",
+            environment  = "PROD",
+            hostname     = sys.env("COMPUTERNAME"),
+            instance     = "{{ ansible_host }}",
+        }
+    }
+    forward_to = [loki.write.endpoint.receiver]
+}
+{% endif %}
+
+// ============================================
+// LOGS ESTÁTICOS DE TAFJ (Solo para T24)
+// ============================================
+{% if enable_tafj_logs | default(false) %}
+{% set tafj_logs = ['database', 'runtime', 'ejb', 'dbimport', 'mdb'] %}
 {% for log_type in tafj_logs %}
 local.file_match "tafj_{{ log_type }}_files" {
     path_targets = [{"__path__" = "C:\\Temenos\\R18\\TAFJ\\log\\{{ log_type }}.log"}]
     sync_period = "5s"
 }
-
 loki.source.file "tafj_{{ log_type }}_scrape" {
     targets    = local.file_match.tafj_{{ log_type }}_files.targets
     forward_to = [loki.process.tafj_{{ log_type }}_processor.receiver]
     tail_from_end = true
 }
-
 loki.process "tafj_{{ log_type }}_processor" {
     stage.drop { expression = "(?i).*(DEBUG|INFO|WARN).*" }
     stage.multiline {
@@ -110,7 +137,7 @@ loki.process "tafj_{{ log_type }}_processor" {
             filename     = "log_tafj_{{ log_type }}",
             log_type     = "{{ log_type }}",
             service_name = "JBOSS-APPL",
-            environment  = "production",
+            environment  = "PROD",
             hostname     = sys.env("COMPUTERNAME"),
             instance     = "{{ ansible_host }}",
             application  = "T24",
@@ -120,66 +147,28 @@ loki.process "tafj_{{ log_type }}_processor" {
     forward_to = [loki.write.endpoint.receiver]
 }
 {% endfor %}
+{% endif %}
 
 // ============================================
-// LOGS TEMPORALES - Info2 
+// LOGS TEMPORALES - Info2 (Solo para T24)
 // ============================================
+{% if enable_temp_info2 | default(false) %}
 local.file_match "temp_files" {
     path_targets = [{"__path__" = "C:\\temp\\info2.log"}]
     sync_period = "5s"
 }
-
 loki.source.file "temp_scrape" {
     targets    = local.file_match.temp_files.targets
     forward_to = [loki.process.temp_processor.receiver]
     tail_from_end = false
 }
-
 loki.process "temp_processor" {
     stage.static_labels {
-        values = {
-            job      = "temp-logs",
-            filename = "log_temp_info2",
-            server   = sys.env("COMPUTERNAME"),
-            instance = "{{ ansible_host }}",
-            source   = "info2",
-        }
+        values = { job = "temp-logs", filename = "log_temp_info2", server = sys.env("COMPUTERNAME"), instance = "{{ ansible_host }}", source = "info2" }
     }
     forward_to = [loki.write.endpoint.receiver]
 }
-
-// ============================================
-// ENDPOINT LOKI (Parametrizado IP y Puerto)
-// ============================================
-loki.write "endpoint" {
-    endpoint {
-        url = "http://{{ grafana_server_ip }}:{{ grafana_loki_port }}/loki/api/v1/push"
-        retry_on_http_429 = true
-        max_backoff_period = "5m"
-        min_backoff_period = "1s"
-    }
-    external_labels = { cluster = "production", datacenter = "main" }
-}
-
-// ============================================
-// ENDPOINT PROMETHEUS (Parametrizado IP y Puerto)
-// ============================================
-prometheus.remote_write "default" {
-    endpoint {
-        url = "http://{{ grafana_server_ip }}:{{ grafana_prometheus_port }}/api/v1/write"
-        queue_config {
-            capacity = 10000
-            max_shards = 50
-            min_shards = 1
-            max_samples_per_send = 5000
-            batch_send_deadline = "5s"
-            min_backoff = "30ms"
-            max_backoff = "5s"
-        }
-    }
-    wal { truncate_frequency = "2h" }
-    external_labels = { cluster = "production", datacenter = "main" }
-}
+{% endif %}
 
 // ============================================
 // TRAZAS - OTLP RECEIVER Y CONVERSORES
@@ -195,9 +184,12 @@ otelcol.receiver.otlp "default" {
 }
 
 otelcol.processor.attributes "add_service_info" {
-    action { key = "deployment.environment"; value = "production"; action = "upsert" }
-    action { key = "host.ip"; value = "{{ ansible_host }}"; action = "upsert" }
-    action { key = "cluster"; value = "production"; action = "upsert" }
+    action { key = "service.name"; value = "jboss-eap"; action = "upsert" }
+    action { key = "service.version"; value = "7.1"; action = "upsert" }
+    action { key = "client"; value = "{{ otlp_client_name | default('APPL') }}"; action = "upsert" }
+    action { key = "environment"; value = "PROD"; action = "upsert" }
+    action { key = "host.name"; value = sys.env("COMPUTERNAME"); action = "upsert" }
+    action { key = "host_ip"; value = "{{ ansible_host }}"; action = "upsert" }
     
     output {
         metrics = [otelcol.processor.batch.default.input]
@@ -210,25 +202,60 @@ otelcol.processor.batch "default" {
     timeout = "5s"
     send_batch_size = 2048
     send_batch_max_size = 4096
-    
     output {
-        // CORRECCIÓN: Ahora las métricas OTLP van a Prometheus, no a Tempo
         metrics = [otelcol.exporter.prometheus.default.input]
         logs    = [otelcol.exporter.loki.default.input]
         traces  = [otelcol.exporter.otlp.tempo.input]
     }
 }
 
-// Conversores internos OTLP a Prometheus/Loki
 otelcol.exporter.prometheus "default" { forward_to = [prometheus.remote_write.default.receiver] }
 otelcol.exporter.loki "default" { forward_to = [loki.write.endpoint.receiver] }
 
 // ============================================
-// ENDPOINT TEMPO (Parametrizado IP y Puerto)
+// ENDPOINTS DE DESTINO (HACIA GRAFANA CENTRAL/GATEWAY)
 // ============================================
+loki.write "endpoint" {
+    endpoint {
+        url = "http://{{ grafana_server_ip | default('10.138.7.20') }}:{{ grafana_loki_port | default('3100') }}/loki/api/v1/push"
+        retry_on_http_429 = true
+        max_backoff_period = "5m"
+        min_backoff_period = "1s"
+    }
+    wal { enabled = true; max_segment_age = "1h" }
+}
+
+prometheus.remote_write "default" {
+    endpoint {
+        url = "http://{{ grafana_server_ip | default('10.138.7.20') }}:{{ grafana_prometheus_port | default('9090') }}/api/v1/write"
+        queue_config {
+            capacity = 10000
+            max_shards = 50
+            min_shards = 1
+            max_samples_per_send = 5000
+            batch_send_deadline = "5s"
+            min_backoff = "30ms"
+            max_backoff = "5s"
+        }
+    }
+    wal { truncate_frequency = "2h" }
+}
+
 otelcol.exporter.otlp "tempo" {
     client {
-        endpoint = "http://{{ grafana_server_ip }}:{{ grafana_tempo_port }}" 
+        endpoint = "http://{{ grafana_server_ip | default('10.138.7.20') }}:{{ grafana_tempo_port | default('4317') }}" 
         tls { insecure = true }
+    }
+    // Añadido como mejor práctica para todos los servidores:
+    sending_queue {
+        enabled       = true
+        num_consumers = 10
+        queue_size    = 10000
+    }
+    retry_on_failure {
+        enabled          = true
+        initial_interval = "5s"
+        max_interval     = "30s"
+        max_elapsed_time = "300s"
     }
 }
