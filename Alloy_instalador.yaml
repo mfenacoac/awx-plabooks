@@ -11,6 +11,9 @@
     alloy_download_url: "https://github.com/mfenacoac/awx-plabooks/releases/download/Grafana/"
     jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
     grafana_server_ip: "10.138.7.20"
+    grafana_loki_port: "3100"
+    grafana_prometheus_port: "9090"
+    grafana_tempo_port: "4317"
 
   tasks:
 
