@@ -9,22 +9,33 @@
     alloy_exe: "Alloy_agente.exe"
     alloy_config_file: "config.alloy"
     alloy_download_url: "https://github.com/mfenacoac/awx-plabooks/releases/download/Grafana/"
-    jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
+    # --- VARIABLES DE RED (Listas para el Gateway) ---
     grafana_server_ip: "10.138.7.20"
     grafana_loki_port: "3100"
     grafana_prometheus_port: "9090"
     grafana_tempo_port: "4317"
-
+    # --- VARIABLES DE CONTROL (Por defecto para T24) ---
+    jboss_base_path: "C:\\Temenos\\R18\\3rdParty\\As"
+    jboss_search_pattern: "T24*"
+    enable_tafj_logs: true
+    enable_temp_info2: true
+    enable_vfs_debug_logs: false
+    otlp_client_name: "APPL"
+    jboss_job_name_override: "JBOSS_APPL"
+    
   tasks:
 
   # ------------------------------------------------------------
+  # 1. Buscar carpetas JBoss
+  # ------------------------------------------------------------
+# ------------------------------------------------------------
   # 1. Buscar carpetas JBoss
   # ------------------------------------------------------------
   - name: Buscar instancias JBoss
     ansible.windows.win_find:
       paths: "{{ jboss_base_path }}"
       file_type: directory
-      patterns: "T24*"   # Patron de busqueda
+      patterns: "{{ jboss_search_pattern }}"   # <--- Ahora es variable
     register: jboss_dirs
 
   - name: Inicializar lista de JBoss
@@ -35,7 +46,9 @@
     set_fact:
       jboss_instances: "{{ jboss_instances + [ {
         'name': item.filename,
-        'log_path': item.path ~ '\\standalone\\log\\server.log'
+        'log_path': item.path ~ '\\standalone\\log\\server.log',
+        'service_name': otlp_client_name,          # <--- Nuevo
+        'job_name': jboss_job_name_override        # <--- Nuevo
       } ] }}"
     loop: "{{ jboss_dirs.files }}"
 
@@ -45,7 +58,7 @@
 
   - name: Fallar si no se detectan JBoss
     fail:
-      msg: "No se detectaron instancias JBoss en {{ jboss_base_path }}"
+      msg: "No se detectaron instancias JBoss en {{ jboss_base_path }} con patron {{ jboss_search_pattern }}"
     when: jboss_instances | length == 0
 
   # ------------------------------------------------------------
