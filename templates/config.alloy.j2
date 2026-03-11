@@ -1,17 +1,28 @@
+logging {
+  level = "info"
+}
+
 // ============================================
 // MÉTRICAS DE WINDOWS
 // ============================================
 
 prometheus.exporter.windows "default" {
   enabled_collectors = [
-    "cpu",
-    "logical_disk",
-    "net",
-    "os",
-    "system",
-    "cpu_info",
-    "memory",
+    "cpu", "logical_disk", "net", "os", "system", "cpu_info", "memory", "time",
   ]
+}
+
+prometheus.scrape "windows_exporter" {
+    targets    = prometheus.exporter.windows.default.targets
+    forward_to = [prometheus.relabel.windows_tags.receiver]
+    scrape_interval = "15s" 
+}
+
+prometheus.relabel "windows_tags" {
+    forward_to = [prometheus.remote_write.default.receiver]
+    rule { target_label = "host_ip"; replacement = "{{ ansible_host }}" }
+    rule { target_label = "job"; replacement = "APPL_TCIB" }
+    rule { target_label = "environment"; replacement = "PROD" }
 }
 
 // ============================================
@@ -20,23 +31,22 @@ prometheus.exporter.windows "default" {
 
 loki.source.windowsevent "application" {
     eventlog_name = "Application"
+    bookmark_path = "C:\\ProgramData\\GrafanaLabs\\Alloy\\data\\bookmark_app.xml"
     forward_to    = [loki.write.endpoint.receiver]
 }
 
-// Mejora: Recolectar log de Sistema pero excluyendo ruido (ej. 7036 = servicio iniciado)
 loki.source.windowsevent "system" {
-    eventlog_name     = "System"
-    forward_to        = [loki.write.endpoint.receiver]
+    eventlog_name = "System"
+    bookmark_path = "C:\\ProgramData\\GrafanaLabs\\Alloy\\data\\bookmark_sys.xml"
+    forward_to    = [loki.write.endpoint.receiver]
 }
 
+// ============================================
+// JBOSS - CICLO DINÁMICO
+// ============================================
 {% for jboss in jboss_instances %}
-// ============================================
-// JBOSS - {{ jboss.name }}
-// ============================================
-
 local.file_match "{{ jboss.name }}_files" {
-    path_targets = [
-        {"__path__" = "{{ jboss.log_path | replace('\\', '/') }}"}]
+    path_targets = [{"__path__" = "{{ jboss.log_path | replace('\\', '/') }}"}]
     sync_period = "5s"
 }
 
@@ -47,32 +57,13 @@ loki.source.file "{{ jboss.name }}_scrape" {
 }
 
 loki.process "{{ jboss.name }}_processor" {
-
-    // 1. FILTRO DE RUIDO (Descarta INFO y DEBUG)
-    stage.drop {
-        expression = "(?i).*(DEBUG|INFO|WARN).*"
-    }
-
-    // 2. EMPAQUETADO MULTILINE (Para Stack Traces de Java)
+    stage.drop { expression = "(?i).*(DEBUG|INFO|WARN).*" }
     stage.multiline {
         firstline     = "^(\\[[A-Z]+\\] )?\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}"
         max_wait_time = "3s"
     }
-
-    // 3. EXTRACCIÓN DE IDs
-    stage.regex {
-        expression = ".*span_id=(?P<span_id>[a-f0-9]{16}).*trace_id=(?P<trace_id>[a-f0-9]{32}).*"
-    }
-
-    // 4. METADATOS ESTRUCTURADOS (Correlación sin Alta Cardinalidad)
-    stage.structured_metadata {
-        values = {
-            trace_id = "",
-            span_id  = "",
-        }
-    }
-
-    // 5. ETIQUETAS ESTÁTICAS
+    stage.regex { expression = ".*span_id=(?P<span_id>[a-f0-9]{16}).*trace_id=(?P<trace_id>[a-f0-9]{32}).*" }
+    stage.structured_metadata { values = { trace_id = "", span_id  = "" } }
     stage.static_labels {
         values = {
             job            = "JBOSS_APPL",
@@ -84,13 +75,12 @@ loki.process "{{ jboss.name }}_processor" {
             jboss_instance = "{{ jboss.name }}",
         }
     }
-
     forward_to = [loki.write.endpoint.receiver]
 }
 {% endfor %}
 
 // ============================================
-// LOGS ESTÁTICOS DE TAFJ (Optimizado con bucle)
+// LOGS ESTÁTICOS DE TAFJ
 // ============================================
 {% set tafj_logs = ['database', 'runtime', 'ejb', 'dbimport', 'mdb'] %}
 
@@ -107,33 +97,13 @@ loki.source.file "tafj_{{ log_type }}_scrape" {
 }
 
 loki.process "tafj_{{ log_type }}_processor" {
-    
-    // 1. FILTRO DE RUIDO
-    stage.drop {
-        expression = "(?i).*(DEBUG|INFO|WARN).*"
-    }
-
-    // 2. EMPAQUETADO MULTILINE HÍBRIDO
+    stage.drop { expression = "(?i).*(DEBUG|INFO|WARN).*" }
     stage.multiline {
         firstline     = "^(\\[[A-Z]+\\] )?\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}"
         max_wait_time = "3s"
     }
-
-    // 3. EXTRAER IDs CON REGEX
-    stage.regex {
-        expression = ".*sessionId=(?P<session_id>[^,}]+).*span_id=(?P<span_id>[a-f0-9]{16}).*trace_id=(?P<trace_id>[a-f0-9]{32}).*"
-    }
-    
-    // 4. METADATOS ESTRUCTURADOS (Correlación Segura)
-    stage.structured_metadata {
-        values = {
-            trace_id   = "",
-            span_id    = "",
-            session_id = "",
-        }
-    }
-    
-    // 5. ETIQUETAS ESTÁTICAS
+    stage.regex { expression = ".*sessionId=(?P<session_id>[^,}]+).*span_id=(?P<span_id>[a-f0-9]{16}).*trace_id=(?P<trace_id>[a-f0-9]{32}).*" }
+    stage.structured_metadata { values = { trace_id = "", span_id = "", session_id = "" } }
     stage.static_labels {
         values = {
             job          = "TAFJ",
@@ -142,12 +112,11 @@ loki.process "tafj_{{ log_type }}_processor" {
             service_name = "JBOSS-APPL",
             environment  = "production",
             hostname     = sys.env("COMPUTERNAME"),
-            instance     = "{{ ansible_host }}",  // IP del Agente
+            instance     = "{{ ansible_host }}",
             application  = "T24",
             client       = "APPL",
         }
     }
-    
     forward_to = [loki.write.endpoint.receiver]
 }
 {% endfor %}
@@ -180,32 +149,24 @@ loki.process "temp_processor" {
 }
 
 // ============================================
-// ENDPOINT LOKI (Parametrizado)
+// ENDPOINT LOKI (Parametrizado IP y Puerto)
 // ============================================
 loki.write "endpoint" {
     endpoint {
-        // Uso de variable de Ansible para la IP central
-        url = "http://{{ grafana_server_ip }}:3100/loki/api/v1/push"
-        
+        url = "http://{{ grafana_server_ip }}:{{ grafana_loki_port }}/loki/api/v1/push"
         retry_on_http_429 = true
         max_backoff_period = "5m"
         min_backoff_period = "1s"
     }
-    
-    external_labels = {
-        cluster = "production",
-        datacenter = "main",
-    }
+    external_labels = { cluster = "production", datacenter = "main" }
 }
 
 // ============================================
-// ENDPOINT PROMETHEUS (Parametrizado + WAL)
+// ENDPOINT PROMETHEUS (Parametrizado IP y Puerto)
 // ============================================
 prometheus.remote_write "default" {
     endpoint {
-        // Uso de variable de Ansible
-        url = "http://{{ grafana_server_ip }}:9090/api/v1/write"
-        
+        url = "http://{{ grafana_server_ip }}:{{ grafana_prometheus_port }}/api/v1/write"
         queue_config {
             capacity = 10000
             max_shards = 50
@@ -216,28 +177,16 @@ prometheus.remote_write "default" {
             max_backoff = "5s"
         }
     }
-
-    // Tolerancia a fallos: Guarda en disco si se cae la red
-    wal {
-        truncate_frequency = "2h"
-    }
-    
-    external_labels = {
-        cluster = "production",
-        datacenter = "main",
-    }
+    wal { truncate_frequency = "2h" }
+    external_labels = { cluster = "production", datacenter = "main" }
 }
 
 // ============================================
-// TRAZAS - OTLP RECEIVER
+// TRAZAS - OTLP RECEIVER Y CONVERSORES
 // ============================================
 otelcol.receiver.otlp "default" {
-    grpc {
-        endpoint = "0.0.0.0:4317" 
-    }
-    http {
-        endpoint = "0.0.0.0:4318"
-    }
+    grpc { endpoint = "0.0.0.0:4317" }
+    http { endpoint = "0.0.0.0:4318" }
     output {
         metrics = [otelcol.processor.attributes.add_service_info.input]
         logs    = [otelcol.processor.attributes.add_service_info.input]
@@ -246,21 +195,9 @@ otelcol.receiver.otlp "default" {
 }
 
 otelcol.processor.attributes "add_service_info" {
-    action {
-        key    = "deployment.environment"
-        value  = "production"
-        action = "upsert"
-    }
-    action {
-        key    = "host.ip"
-        value  = "{{ ansible_host }}"
-        action = "upsert"
-    }
-    action {
-        key    = "cluster"
-        value  = "production"
-        action = "upsert"
-    }
+    action { key = "deployment.environment"; value = "production"; action = "upsert" }
+    action { key = "host.ip"; value = "{{ ansible_host }}"; action = "upsert" }
+    action { key = "cluster"; value = "production"; action = "upsert" }
     
     output {
         metrics = [otelcol.processor.batch.default.input]
@@ -275,28 +212,23 @@ otelcol.processor.batch "default" {
     send_batch_max_size = 4096
     
     output {
-        metrics = [otelcol.exporter.otlp.tempo.input]
+        // CORRECCIÓN: Ahora las métricas OTLP van a Prometheus, no a Tempo
+        metrics = [otelcol.exporter.prometheus.default.input]
         logs    = [otelcol.exporter.loki.default.input]
         traces  = [otelcol.exporter.otlp.tempo.input]
     }
 }
 
+// Conversores internos OTLP a Prometheus/Loki
+otelcol.exporter.prometheus "default" { forward_to = [prometheus.remote_write.default.receiver] }
+otelcol.exporter.loki "default" { forward_to = [loki.write.endpoint.receiver] }
+
 // ============================================
-// ENDPOINT TEMPO (Parametrizado)
+// ENDPOINT TEMPO (Parametrizado IP y Puerto)
 // ============================================
 otelcol.exporter.otlp "tempo" {
     client {
-        // Uso de variable de Ansible
-        endpoint = "http://{{ grafana_server_ip }}:4317" 
-        tls {
-            insecure = true
-        }
+        endpoint = "http://{{ grafana_server_ip }}:{{ grafana_tempo_port }}" 
+        tls { insecure = true }
     }
-}
-
-// ============================================
-// EXPORTAR LOGS OTLP A LOKI (El bloque que faltaba)
-// ============================================
-otelcol.exporter.loki "default" {
-    forward_to = [loki.write.endpoint.receiver]
 }
